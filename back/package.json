@@ -1,0 +1,27 @@
+{
+  "name": "back",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "npx tsc",
+    "prestart": "npm run build",
+    "start": "node ./build/index.js",
+    "devStart": "npx nodemon ./src/index.ts"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2",
+    "typescript": "^5.2.2"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.14",
+    "@types/express": "^4.17.17",
+    "nodemon": "^3.0.1",
+    "ts-node": "^10.9.1"
+  }
+}
