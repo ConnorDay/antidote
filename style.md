@@ -21,6 +21,7 @@ If the function returns anything other than void, include that in the function d
 Functions should be documented with JSDoc comments. Functions should have a single sentence describing what it's purpose is, as well as a simple description of each parameter should be.
 If the function returns anything, include a brief description of what is getting returned.
 Since we're writing this in typescript including the types in these comments is redundant and not needed.
+Constructors are exempt from this.
 ```typescript
 /**
  * A function that is supposed to demonstrate syntax
