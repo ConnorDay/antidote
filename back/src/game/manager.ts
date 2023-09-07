@@ -11,27 +11,6 @@ export class Manager {
 
     constructor(io: Server) {
 
-        io.on("connection", (socket) => {
-            const name = socket.handshake.query.name;
-            if (name === undefined || name === "" || Array.isArray(name)) {
-                socket.emit("error", {
-                    message: "Name was not in expected format"
-                })
-                socket.disconnect()
-                return;
-            }
-
-            const code = socket.handshake.query.code;
-            if (code === undefined || code === "" || Array.isArray(code)) {
-                socket.emit("error", {
-                    message: "Code was not in expected format"
-                });
-                socket.disconnect();
-                return;
-            }
-
-            this.registerConnection(code, name, socket);
-        })
     }
 
     /**
@@ -40,14 +19,14 @@ export class Manager {
      * @param name The name of the connecting player.
      * @param socket The socket that the player used to connect.
      */
-    registerConnection(code: string, name: string, socket: Socket) {
+    registerConnection(code: string, name: string, socket: Socket, room_factory: () => Room) {
         console.log(`Player '${name}' connected to room '${code}'`);
 
         let target_room = this.all_rooms[code];
         if (target_room === undefined) {
             console.log(`No room found for code '${code}'. Creating a new room.`);
 
-            target_room = new Room(code);
+            target_room = room_factory();
             this.all_rooms[code] = target_room;
             target_room.on("empty", () => {
                 console.log(`Removing empty room '${code}'`);
