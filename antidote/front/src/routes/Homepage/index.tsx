@@ -1,12 +1,10 @@
 import React from 'react';
-import { io } from "socket.io-client";
 import { CodeEnter } from "../../components";
-import { Pages, Global } from "../../Global";
-import { Lobby } from "../Lobby";
+import { Global } from "../../Global";
 
 function Homepage() {
     return (
-        <div className="homepage">
+        <div className="homescreen">
             <CodeEnter
                 onSubmit={(code: string, name: string) => {
                     Global.connectionInfo = { code, name };
@@ -19,7 +17,7 @@ function Homepage() {
                             },
                         }
                     );
-                    Global.setDisplay(Pages.Lobby);
+                    Global.setDisplay(<Lobby />);
                 }}
             />
         </div>
