@@ -36,7 +36,7 @@ export class Lobby extends Room {
                 ready: this.ready_status[player.id]
             });
         });
-
+        console.log(sync_list);
         this.emitAll("lobbySync", sync_list);
     }
 }
