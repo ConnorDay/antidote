@@ -69,7 +69,7 @@ export abstract class Room {
      * Removes a player from the room.
      * @param player the player to remove
      */
-    removePlayer(player: Player) {
+    removePlayer(player: Player, sync: boolean = true) {
         this.connected_players = this.connected_players.filter((target_player) => {
             return target_player !== player;
         });
@@ -80,6 +80,10 @@ export abstract class Room {
             this._callbacks.empty.forEach((callback) => {
                 callback();
             })
+        }
+
+        if (sync) {
+            this.sync();
         }
     }
 
