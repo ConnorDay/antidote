@@ -28,10 +28,8 @@ export class Manager {
 
             target_room = room_factory();
             this.all_rooms[code] = target_room;
-            target_room.on("empty", () => {
-                console.log(`Removing empty room '${code}'`);
-                this.all_rooms[code] = undefined;
-            });
+
+            this.registerListeners(target_room);
         }
 
         const new_player = new Player(name, socket);
@@ -44,5 +42,35 @@ export class Manager {
             })
             socket.disconnect();
         }
+    }
+
+    /**
+     * register all listeners needed to the given room
+     * @param room the room to register listeners
+     */
+    registerListeners(room: Room) {
+        room.on("empty", () => {
+            console.log(`Removing empty room '${room.code}'`);
+            this.all_rooms[room.code] = undefined;
+        });
+
+        room.on("change_to", (new_room) => {
+            console.log(`Changing room '${room.code}' to a new Room`)
+            this.removeListeners(room);
+            this.registerListeners(new_room);
+            this.all_rooms[room.code] = new_room;
+            new_room.copyFrom(room);
+            room.removeListeners();
+            new_room.ready();
+        })
+    }
+
+    /**
+     * remove all listeners from room
+     * @param room the room to remove listeners from
+     */
+    removeListeners(room: Room) {
+        room.clear("empty");
+        room.clear("change_to");
     }
 }

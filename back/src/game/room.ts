@@ -10,6 +10,7 @@ export class PlayerAlreadyExists extends Error {
 
 interface Callbacks {
     empty: Array<() => void>;
+    change_to: Array<(new_room: Room) => void>;
 }
 
 export abstract class Room {
@@ -19,6 +20,7 @@ export abstract class Room {
 
     protected _callbacks: Callbacks = {
         empty: [],
+        change_to: [],
     };
 
     protected _listener_events: string[] = ["disconnected"];
@@ -97,20 +99,47 @@ export abstract class Room {
      * @param event the event to register
      * @param callback the function to call when the event triggers
      */
-    on<K extends keyof Callbacks>(event: K, callback: Callbacks[K][number]) {
-        this._callbacks[event].push(callback);
+    on<K extends keyof Callbacks>(event: K, callback: Callbacks[typeof event][number]) {
+        this._callbacks[event].push(callback as (...args: any[]) => void);
+    }
+
+    /**
+     * clear all the listeners for the given event
+     * @param event the event to clear listeners
+     */
+    clear(event: keyof Callbacks) {
+        this._callbacks[event] = [];
+    }
+
+    /**
+     * Copy all relevant information from the specified room
+     * @param target_room the room to copy information from
+     */
+    copyFrom(target_room: Room) {
+        target_room.connected_players.forEach((player) => {
+            this.addPlayer(player, false);
+        })
+        target_room.disconnected_players.forEach((player) => {
+            this.disconnected_players.push(player);
+        });
     }
 
     /**
      * Remove listeners in _listener_events from all players
      */
-    protected removeListeners() {
+    removeListeners() {
         this._listener_events.forEach((event) => {
             this.connected_players.forEach((player) => {
                 player.socket.removeAllListeners(event);
             });
         });
     }
+
+    /**
+     * A method to be called after everything has been initialized in the room.
+     * @virtual
+     */
+    ready() { }
 
     /**
      * Emit the same event over all connected players.

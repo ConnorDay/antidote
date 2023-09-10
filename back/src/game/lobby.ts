@@ -1,17 +1,20 @@
 import { Room } from "./room";
 import { LobbySyncObject } from "../../../common/sync-objects";
 import { Player } from "./player";
+import { Loading } from "./loading";
 
 const START_DELAY = 5 * 1000;
 
 export class Lobby extends Room {
 
     ready_status: { [key: string]: boolean } = {};
+    next_room: () => Room;
     private _round_start_timeout?: NodeJS.Timeout;
 
-    constructor(code: string) {
+    constructor(code: string, room_factory: () => Room) {
         super(code);
         this._listener_events.push("toggleReady");
+        this.next_room = room_factory;
     }
 
     /**
@@ -36,7 +39,9 @@ export class Lobby extends Room {
 
     removePlayer(player: Player, sync?: boolean): void {
         super.removePlayer(player, sync);
-        this.checkReady();
+        if (this.connected_players.length > 0) {
+            this.checkReady();
+        }
     }
 
     checkReady() {
@@ -45,7 +50,7 @@ export class Lobby extends Room {
         });
 
         if (all_ready) {
-            console.log(`All players in room '${this.code}' starting round timer`);
+            console.log(`All players in room '${this.code}' are ready. Starting round timer`);
 
             const startTime = Date.now() + START_DELAY;
 
@@ -54,6 +59,9 @@ export class Lobby extends Room {
             this._round_start_timeout = setTimeout(() => {
                 console.log(`Room '${this.code}' has started a round`);
                 this.removeListeners();
+                this._callbacks.change_to.forEach((callback) => {
+                    callback(new Loading(this.code, this.next_room))
+                });
             }, START_DELAY);
         } else if (this._round_start_timeout !== undefined) {
             console.log("A player has become unready, stopping round timer");
@@ -74,5 +82,9 @@ export class Lobby extends Room {
             });
         });
         this.emitAll("lobbySync", sync_list);
+    }
+
+    ready() {
+        this.sync();
     }
 }

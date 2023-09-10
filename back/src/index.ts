@@ -4,6 +4,7 @@ import http from "http";
 import { Server } from "socket.io";
 import { Manager } from "./game/manager";
 import { Lobby } from "./game/lobby";
+import { Antidote } from "./antidote/game";
 
 const app = express();
 const server = http.createServer(app);
@@ -37,7 +38,7 @@ io.on("connection", (socket) => {
         return;
     }
 
-    manager.registerConnection(code, name, socket, () => { return new Lobby(code) });
+    manager.registerConnection(code, name, socket, () => { return new Lobby(code, () => { return new Antidote(code) }) });
 })
 
 server.listen(8000, () => console.log("Server has been started"))
