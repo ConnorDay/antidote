@@ -114,11 +114,21 @@ export abstract class Room {
      */
     copyFrom(target_room: Room) {
         target_room.connected_players.forEach((player) => {
-            this.addPlayer(player, false);
+            this.addPlayer(this.convertPlayer(player));
         })
         target_room.disconnected_players.forEach((player) => {
-            this.disconnected_players.push(player);
+            this.disconnected_players.push(this.convertPlayer(player));
         });
+    }
+
+    /**
+     * Convert $player to this room's player type.
+     * @param player the player to copy
+     * @returns the converted player
+     */
+    convertPlayer(player: Player): Player{
+        const new_player = this.generatePlayer(player.name, player.socket);
+        return new_player;
     }
 
     /**
