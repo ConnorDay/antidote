@@ -1,0 +1,52 @@
+.lobby-main{
+    display: flex;
+    flex-direction: column;
+    flex: 100%;
+    width: 100%;
+    gap: 12px;
+}
+.lobby-header{
+    display: flex;
+    background: rgba(0,0,0,.2);
+    padding: 8px;
+}
+.lobby-content{
+    display: flex;
+    flex-direction: row;
+    flex: 100%;
+    gap: 12px;
+}
+.lobby-players{
+    padding: 12px;
+    margin: 0 12px 12px 12px;
+    outline: 2px solid rgba(0,0,0,.6);
+    text-align: start;
+    width: 20%;
+}
+.lobby-player-list{
+    margin-left: 12px;
+    font-size: calc(12px + 1vmin);
+}
+.lobby-not-ready{
+    color: red;
+}
+.lobby-ready{
+    color: green;
+}
+.lobby-configuration{
+    display: flex;
+    flex-direction: column;
+    flex: 100%;
+    margin: 0 12px 12px 0;
+}
+.lobby-options{
+    flex: 100%;
+    outline: 2px solid rgba(0,0,0,.6);
+    margin-bottom: 12px;
+    padding: 24px;
+}
+.lobby-timer{
+    outline: 2px solid rgba(0,0,0,.6);
+    padding: 8px 8px 8px 8px;
+    margin-bottom: 12px;
+}

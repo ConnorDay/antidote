@@ -1,0 +1,13 @@
+.card-glow{
+    box-shadow: #DDDD00 0 0 8px;
+    cursor: pointer;
+}
+.card{
+    display: flex;
+    flex-direction: column;
+    background-color: rgba(0,0,0,.2);
+    outline: 2px solid rgba(0,0,0,.5);
+    color: black;
+    border-radius: 8px;
+    padding: 24px;
+}

@@ -7,7 +7,8 @@ export type ConnectionInfo = {
 
 export enum Pages {
     Homepage,
-    Lobby
+    Lobby,
+    Game
 }
 
 type Global = {

@@ -3,6 +3,7 @@ import { Homepage } from './routes/Homepage';
 import { Lobby } from './routes/Lobby';
 import { Pages, Global } from './Global';
 import './App.css';
+import { Game } from "./routes/Game";
 
 function App() {
     //Set the default display to be the homescreen. When a code/ name is submitted, change to the lobby and pass along the connection info
@@ -15,12 +16,15 @@ function App() {
     let page: JSX.Element;
     page = <Homepage />;
     switch (toDisplay) {
-        case 0:
-          page = <Homepage />;
-          break;
-        case 1:
-          page = <Lobby />
-          break;
+        case Pages.Homepage:
+            page = <Homepage />;
+            break;
+        case Pages.Lobby:
+            page = <Lobby />
+            break;
+        case Pages.Game:
+            page = <Game />
+            break;
     }
     return (
         <div className="App">

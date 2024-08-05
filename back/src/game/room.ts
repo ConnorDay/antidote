@@ -18,6 +18,8 @@ export abstract class Room {
     disconnected_players: Player[] = [];
     code: string;
 
+    abstract generatePlayer(name: string, socket: Socket): Player
+
     protected _callbacks: Callbacks = {
         empty: [],
         change_to: [],
@@ -56,11 +58,6 @@ export abstract class Room {
         }
 
         this.connected_players.push(player);
-
-        player.socket.on("disconnect", () => {
-            console.log(`Player '${player.name}' disconnected from '${this.code}'`);
-            this.removePlayer(player);
-        })
 
         if (sync) {
             this.sync();

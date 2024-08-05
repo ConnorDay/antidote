@@ -19,6 +19,11 @@ function Homepage() {
                             },
                         }
                     );
+
+                    Global.socket.on("disconnect", () => {
+                        Global.setDisplay(Pages.Homepage);
+                    })
+
                     Global.setDisplay(Pages.Lobby);
                 }}
             />
@@ -26,4 +31,4 @@ function Homepage() {
     );
 }
 
-export {Homepage};
+export { Homepage };

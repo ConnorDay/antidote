@@ -1,10 +1,16 @@
 import { Player } from "./player";
 import { Room } from "./room";
 import { LoadingSyncObject } from "../../../common/sync-objects";
+import { LoadingPlayer } from "./LoadingPlayer";
+import { Socket } from "socket.io";
 
 export class Loading extends Room {
     connected_status: { [key: string]: boolean } = {};
     next_room: () => Room;
+
+    generatePlayer(name: string, socket: Socket): LoadingPlayer {
+        return new LoadingPlayer(name, socket, this);
+    }
 
     constructor(code: string, next_room: () => Room) {
         super(code);
@@ -42,7 +48,7 @@ export class Loading extends Room {
                     callback(this.next_room());
                 });
             }
-        })
+        });
 
         player.socket.emit("startLoading");
     }

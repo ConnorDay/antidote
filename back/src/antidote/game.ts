@@ -1,13 +1,22 @@
 import { Room } from "../game/room"
-import { Formula, SpecialCards } from "../../../common/antidote-objects";
+import { Formula, ActionType, TurnActionObject, HandQuery } from "../../../common/antidote-objects";
 import { Card } from "../game/card";
-import { PlayerStatusObject, GameSyncObject } from "../../../common/sync-objects";
+import { PlayerStatusObject, GameSyncObject, ActionSyncObject } from "../../../common/sync-objects";
 import { Player } from "../game/player";
+import { GamePlayer } from "./GamePlayer";
+import { Socket } from "socket.io";
 
 export class Antidote extends Room {
     antidote?: Formula
     hands: { [key: string]: Card[] } = {};
     current_turn = 0;
+
+    current_action?: ActionType;
+    waiting_on: string[] = [];
+
+    generatePlayer(name: string, socket: Socket): GamePlayer {
+        return new GamePlayer(name, socket, this);
+    }
 
     constructor(code: string) {
         super(code);
@@ -16,10 +25,91 @@ export class Antidote extends Room {
 
     addPlayer(player: Player, sync?: boolean) {
         super.addPlayer(player, sync);
+
+        player.socket.on("turnAction", (action: TurnActionObject) => {
+            console.log(`Got a turn action from '${player.name}'`)
+            const current_turn_id = this.connected_players[this.current_turn].id;
+            if (current_turn_id !== player.id) {
+                player.socket.emit("error", {
+                    message: "Not your turn."
+                })
+                console.log(`Current turn does not belong to Player '${player.name}'`);
+                return;
+            }
+
+            if (this.current_action !== undefined) {
+                console.log(`Player '${player.name}' sent a valid action, but an action is already set.`)
+                return;
+            }
+
+            if (action.action === "trade") {
+                if (action.argument !== "left" && action.argument !== "right") {
+                    if (action.argument === player.id) {
+                        console.log(`Player '${player.name}' tried to trade with themselves.`)
+                        player.socket.emit("error", {
+                            message: "Cannot trade with yourself"
+                        });
+                        return;
+                    }
+
+                    const target_player = this.connected_players.find(player => player.id === action.argument);
+                    if (target_player === undefined) {
+                        console.log(`Unable to find player with id '${action.argument}'`)
+                        player.socket.emit("error", {
+                            message: `Unable to find player with id '${action.argument}'`
+                        });
+                        return;
+                    }
+
+                    console.log(`Player '${player.name}' wants to trade with '${target_player.name}'`);
+                    const query: HandQuery = {
+                        message: `${player.name} would like to trade.`,
+                        can_reject: true,
+                        destination: player.name,
+                    }
+                    target_player.socket.emit("handQuery", query)
+
+                    target_player.socket.once("handQueryResponse", (response?: string) => {
+                        console.log(`Got a query response from '${target_player.name}'`);
+                        if (response === undefined) {
+                            console.log(`Player '${target_player.name}' has rejected the trade offer`);
+                            this.current_action = undefined;
+                            this.waiting_on = [player.id];
+                            this.actionSync(`Player '${target_player.name}' has rejected the trade offer`);
+                            return;
+                        }
+                    });
+                    this.current_action = "trade";
+                    this.waiting_on = [target_player.id];
+                    this.actionSync(`Player '${player.name}' wants to trade with '${target_player.name}'`);
+                    return;
+                }
+
+                const query: HandQuery = {
+                    message: `${player.name} decided to trade research`,
+                    can_reject: false,
+                    destination: action.argument,
+                }
+
+                this.waiting_on = [];
+                this.connected_players.forEach((player) => {
+                    this.waiting_on.push(player.id)
+                });
+
+                this.emitAll("handQuery", query);
+            }
+        });
+    }
+
+    removePlayer(player: Player, sync?: boolean): void {
+
     }
 
     sync() {
-        const to_sync: GameSyncObject[] = [];
+        if (this.connected_players.length === 0) {
+            return;
+        }
+
         const status: PlayerStatusObject[] = [];
         this.connected_players.forEach((player) => {
             const is_turn = this.connected_players[this.current_turn].id === player.id;
@@ -28,15 +118,23 @@ export class Antidote extends Room {
                 id: player.id,
                 is_turn: is_turn,
             });
-
-            to_sync.push({
+        });
+        this.connected_players.forEach((player) => {
+            const is_turn = this.connected_players[this.current_turn].id === player.id;
+            player.socket.emit("gameSync", {
                 players: status,
                 hand: this.hands[player.id],
                 is_turn: is_turn,
-            });
+            })
         });
+    }
 
-        this.emitAll("gameSync", to_sync);
+    actionSync(message: string) {
+        const sync: ActionSyncObject = {
+            message,
+            waiting_on: this.waiting_on,
+        }
+        this.emitAll("actionSync", sync)
     }
 
     ready() {
@@ -92,7 +190,20 @@ export class Antidote extends Room {
 
         this.dealCards(number_cards, number_hand_size);
 
-        this.current_turn = Math.floor(Math.random() * this.connected_players.length);
+        this.updateTurn(Math.floor(Math.random() * this.connected_players.length));
+    }
+
+    updateTurn(turn_number: number) {
+        if (turn_number < 0) {
+            turn_number = this.connected_players.length + turn_number;
+        }
+
+        turn_number %= this.connected_players.length;
+        this.current_turn = turn_number;
+
+        console.log(turn_number);
+        const current_player = this.connected_players[turn_number];
+        this.waiting_on = [current_player.id];
 
         this.sync();
     }

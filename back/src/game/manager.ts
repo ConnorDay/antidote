@@ -1,6 +1,8 @@
 import { Socket, Server } from "socket.io";
 import { Player } from "./player";
 import { Room } from "./room";
+import { LobbyPlayer } from "./LobbyPlayer";
+import { Lobby } from "./lobby";
 
 interface RoomDictionary {
     [key: string]: Room | undefined;
@@ -31,8 +33,7 @@ export class Manager {
 
             this.registerListeners(target_room);
         }
-
-        const new_player = new Player(name, socket);
+        const new_player = target_room.generatePlayer(name, socket);
         try {
             target_room.addPlayer(new_player);
         } catch (PlayerAlreadyExists) {
@@ -62,7 +63,7 @@ export class Manager {
             new_room.copyFrom(room);
             room.removeListeners();
             new_room.ready();
-        })
+        });
     }
 
     /**

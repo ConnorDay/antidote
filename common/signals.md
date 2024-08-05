@@ -1,10 +1,13 @@
 # Outbound
 Outbound signals are signals that are sent from the browsers and received by the back end.
 
-| Signal Name                   | Message Type | Received In State |
-| ----------------------------- | ------------ | ----------------- |
-| [`toggleReady`](#toggleready) | `null`       | Lobby             |
-| [`loaded`](#loaded)           | `null`       | Loading           |
+| Signal Name                               | Message Type         | Received In State |
+| ----------------------------------------- | -------------------- | ----------------- |
+| [`toggleReady`](#toggleready)             | `null`               | Lobby             |
+| [`loaded`](#loaded)                       | `null`               | Loading           |
+| [`turnAction`](#turnAction)               | `TurnActionObject`   | Game              |
+| [`turnResponse`](#turnResponse)           | `TurnResponseObject` | Game              |
+| [`handQueryResponse`](#handQueryResponse) | `string`             | Game              |
 
 ## toggleReady
 
@@ -33,6 +36,9 @@ Inbound signals are signals that are sent from the back end and received by the 
 | [`roundTimerStop`](#roundtimerstop)   | `null`                | Lobby             |
 | [`startLoading`](#startloading)       | `null`                | Lobby             |
 | [`loadingSync`](#loadingsync)         | `LoadingSyncObject[]` | Game              |
+| [`gameSync`](#gameSync)               | `GameSyncObject`      | Game              |
+| [`actionSync`](#actionSync)           | `ActionSyncObject`    | Game              |
+| [`handQuery`](#handQuery)             | `HandQuery`           | Game              |
 
 ## lobbySync
 

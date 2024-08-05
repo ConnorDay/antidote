@@ -1,5 +1,3 @@
-import { Card } from "../back/src/game/card";
-
 export interface LobbySyncObject {
     name: string;
     id: string;
@@ -12,6 +10,11 @@ export interface LoadingSyncObject {
     connected: boolean;
 }
 
+export interface CardObject {
+    suit?: string;
+    value?: string;
+    id: string;
+}
 export interface PlayerStatusObject {
     name: string;
     id: string;
@@ -20,6 +23,11 @@ export interface PlayerStatusObject {
 }
 export interface GameSyncObject {
     players: PlayerStatusObject[];
-    hand: Card[];
+    hand: CardObject[];
     is_turn: boolean;
+}
+
+export interface ActionSyncObject {
+    message: string;
+    waiting_on: string[];
 }
