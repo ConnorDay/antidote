@@ -105,7 +105,7 @@ export abstract class Room {
      */
     copyFrom(target_room: Room) {
         target_room.connected_players.forEach((player) => {
-            this.addPlayer(this.convertPlayer(player));
+            this.addPlayer(this.convertPlayer(player), false);
         })
         target_room.disconnected_players.forEach((player) => {
             this.disconnected_players.push(this.convertPlayer(player));

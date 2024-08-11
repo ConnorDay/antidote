@@ -1,8 +1,10 @@
 import { beforeAll, describe, expect, test } from "@jest/globals";
 import { io, Socket } from "socket.io-client";
-import { LoadingSyncObject, LobbySyncObject } from "../../common/sync-objects";
+import { CardObject, GameSyncObject, LoadingSyncObject, LobbySyncObject } from "../../common/sync-objects";
 
 const players: Socket[] = [];
+const hands: CardObject[][] = [];
+let turn = -1;
 
 async function expectAllPredicate(predicate: (player: Socket) => Promise<void>) {
     const promises: Promise<void>[] = [];
@@ -382,7 +384,6 @@ describe("Lobby Testing", () => {
     test("Player can't load in multiple times", async () => {
         const error_timer = new Promise<void>((resolve, reject) => {
             players[0].once("error", ({ message }) => {
-                console.log(message);
                 expect(message).toBe("Already connected into room.");
                 resolve();
             });
@@ -405,6 +406,28 @@ describe("Lobby Testing", () => {
     });
 
     test("The rest of the players load in", async () => {
+
+        players.forEach(() => {
+            hands.push([]);
+        })
+
+        const game_timer = expectAllPredicate(async (player) => {
+            return new Promise((resolve) => {
+                player.once("gameSync", (sync: GameSyncObject) => {
+
+                    const player_index = players.findIndex( p => p.id === player.id );
+                    hands[player_index] = sync.hand;
+
+                    if (sync.is_turn){
+                        expect(turn).toBe(-1);
+                        turn = player_index;
+                    }
+
+                    resolve();
+                });
+            })
+        });
+
         let index = 1;
         for (let player of players){
             if (player.id === players[0].id){
@@ -431,5 +454,42 @@ describe("Lobby Testing", () => {
 
             index++;
         }
+
+        await game_timer;
     });
+
+    test("Hands are the same size", () => {
+        const size = hands[0].length;
+
+        hands.forEach( hand => {
+            expect(hand.length).toBe(size);
+        });
+    });
+
+    test("able to determine antidote", () => {
+        const suits = new Set<string>();
+        const x_cards: string[] = [];
+        hands.forEach( hand => {
+            hand.forEach( card => {
+                expect(card.suit).toBeDefined();
+                if (!card.suit) return;
+
+                if (card.suit !== "syringe"){
+                    suits.add( card.suit )
+                }
+                if (card.value === "x"){
+                    x_cards.push(card.suit);
+                }
+            });
+        });
+
+        x_cards.forEach( formula => {
+            expect( suits.has(formula) ).toBe(true);
+            if(!suits.has(formula)) return;
+
+            suits.delete(formula);
+        });
+
+        expect(suits.size).toBe(1);
+    })
 });

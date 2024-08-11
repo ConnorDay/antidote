@@ -5,8 +5,11 @@ import { PlayerStatusObject, GameSyncObject, ActionSyncObject } from "../../../c
 import { Player } from "../game/player";
 import { GamePlayer } from "./GamePlayer";
 import { Socket } from "socket.io";
+import { Deck } from "../game/deck";
 
 export class Antidote extends Room {
+    connected_players: GamePlayer[] = [];
+
     antidote?: Formula
     hands: { [key: string]: Card[] } = {};
     current_turn = 0;
@@ -123,7 +126,7 @@ export class Antidote extends Room {
             const is_turn = this.connected_players[this.current_turn].id === player.id;
             player.socket.emit("gameSync", {
                 players: status,
-                hand: this.hands[player.id],
+                hand: player.hand,
                 is_turn: is_turn,
             })
         });
@@ -157,24 +160,24 @@ export class Antidote extends Room {
         console.log(`Selected ${this.antidote} as the antidote`)
         x_cards.splice(random_index, 1);
 
-        const special_cards: Card[] = [];
-        const number_cards: Card[] = [];
+        const special_cards = new Deck<Card>();
+        const number_cards = new Deck<Card>();
         x_cards.forEach((formula) => {
-            special_cards.push(new Card(formula, "x"));
+            special_cards.add(new Card(formula, "x"));
             for (let i = 0; i < this.connected_players.length; i++) {
-                number_cards.push(new Card(formula, `${i + 1}`));
+                number_cards.add(new Card(formula, `${i + 1}`));
             }
         })
 
         for (let i = 0; i < this.connected_players.length; i++) {
-            number_cards.push(new Card(this.antidote, `${i + 1}`));
+            number_cards.add(new Card(this.antidote, `${i + 1}`));
         }
 
         const number_of_syringes = this.connected_players.length - (x_cards.length % this.connected_players.length);
         console.log(`Calculated number of syringes: ${number_of_syringes}`);
 
         for (let i = 0; i < number_of_syringes; i++) {
-            special_cards.push(new Card("syringe"));
+            special_cards.add(new Card("syringe"));
         }
 
         this.connected_players.forEach((player) => {
@@ -182,13 +185,11 @@ export class Antidote extends Room {
         });
 
         const special_hand_size = special_cards.length / this.connected_players.length;
-        console.log(`Calculated special hand size '${special_hand_size}' from card length '${special_cards.length}' and player count '${this.connected_players.length}'`)
+        special_cards.shuffle();
         this.dealCards(special_cards, special_hand_size);
 
-        const number_hand_size = number_cards.length / this.connected_players.length + special_hand_size;
-        console.log(`Calculated hand size '${number_hand_size}' from card length '${number_cards.length}' and player count '${this.connected_players.length}'`)
-
-        this.dealCards(number_cards, number_hand_size);
+        number_cards.shuffle();
+        this.dealCards(number_cards, x_cards.length + 1);
 
         this.updateTurn(Math.floor(Math.random() * this.connected_players.length));
     }
@@ -201,26 +202,18 @@ export class Antidote extends Room {
         turn_number %= this.connected_players.length;
         this.current_turn = turn_number;
 
-        console.log(turn_number);
+        console.log("Current turn number:",turn_number);
         const current_player = this.connected_players[turn_number];
         this.waiting_on = [current_player.id];
 
         this.sync();
     }
 
-    dealCards(cards: Card[], limit: number) {
-        const valid_players: string[] = [];
+    dealCards(cards: Deck<Card>, limit: number) {
         this.connected_players.forEach((player) => {
-            valid_players.push(player.id);
+            cards.draw(limit).forEach( (card) => {
+                player.hand.push(card);
+            })
         })
-
-        cards.forEach((card) => {
-            const selected_player_index = Math.floor(Math.random() * valid_players.length);
-            const selected_player_id = valid_players[selected_player_index];
-            this.hands[selected_player_id].push(card);
-            if (this.hands[selected_player_id].length === limit) {
-                valid_players.splice(selected_player_index, 1);
-            }
-        });
     }
 }

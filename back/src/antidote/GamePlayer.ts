@@ -1,3 +1,8 @@
+import { Card } from "../game/card";
 import { Player } from "../game/player";
 
-export class GamePlayer extends Player { }
+type events = "";
+
+export class GamePlayer extends Player {
+    hand: Card[] = [];
+}
