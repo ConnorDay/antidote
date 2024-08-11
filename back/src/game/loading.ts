@@ -5,8 +5,9 @@ import { LoadingPlayer } from "./LoadingPlayer";
 import { Socket } from "socket.io";
 
 export class Loading extends Room {
-    connected_status: { [key: string]: boolean } = {};
     next_room: () => Room;
+
+    connected_players: LoadingPlayer[] = [];
 
     generatePlayer(name: string, socket: Socket): LoadingPlayer {
         return new LoadingPlayer(name, socket, this);
@@ -29,26 +30,7 @@ export class Loading extends Room {
 
         player.on("loaded", () => this.handlePlayerLoad());
 
-        player.socket.on("loaded", () => {
-            console.log("got a loaded message");
-            if (this.connected_status[player.id] === true) {
-                console.warn(`Player '${player.name}' attempted to connect to room '${this.code}', but was already connected`);
-                return;
-            }
-
-            console.log(`Player '${player.name}' has connected to room '${this.code}'`);
-            this.connected_status[player.id] = true
-            this.sync();
-
-            const all_players_connected = this.connected_players.every((player) => {
-                return this.connected_status[player.id];
-            });
-            if (all_players_connected) {
-                this._callbacks.change_to.forEach((callback) => {
-                    callback(this.next_room());
-                });
-            }
-        });
+        player.socket.on("loaded", () => { this.handlePlayerLoad() });
 
     }
 
@@ -56,6 +38,15 @@ export class Loading extends Room {
      * @handler 
      */
     handlePlayerLoad(){
+        this.sync();
+        const all_players_connected = this.connected_players.every((player) => {
+            return player.loaded;
+        });
+        if (all_players_connected) {
+            this._callbacks.change_to.forEach((callback) => {
+                callback(this.next_room());
+            });
+        }
         
     }
 
@@ -65,7 +56,7 @@ export class Loading extends Room {
             sync_list.push({
                 name: player.name,
                 id: player.id,
-                connected: this.connected_status[player.id],
+                connected: player.loaded
             });
         });
         this.emitAll("loadingSync", sync_list);
