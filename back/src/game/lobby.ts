@@ -29,6 +29,9 @@ export class Lobby extends Room {
      */
     addPlayer(player: LobbyPlayer, sync?: boolean) {
         super.addPlayer(player, sync);
+
+        player.on("toggleReady", () => {this.onToggleReady()})
+        player.on("toggleTimer", () => {this.onToggleTimer()})
     }
 
     removePlayer(player: LobbyPlayer, sync?: boolean): void {
@@ -41,7 +44,12 @@ export class Lobby extends Room {
         }
     }
 
-    toggleTimer() {
+    onToggleReady(){
+        this.sync();
+        this.checkReady();
+    }
+
+    onToggleTimer() {
         if (this._round_start_timeout === undefined) {
             console.log(`All players in room '${this.code}' are ready and host has started round timer`);
 

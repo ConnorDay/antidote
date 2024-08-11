@@ -1,8 +1,13 @@
 import { Socket } from "socket.io";
-import { Callback, Player } from "./player";
 import { Lobby } from "./lobby";
+import { EmitablePlayer } from "./EmitablePlayer";
+import { Callback } from "./player";
 
-export class LobbyPlayer extends Player {
+export class LobbyPlayer extends EmitablePlayer<"toggleReady"|"toggleTimer">{
+    event_callbacks = {
+        toggleReady: [],
+        toggleTimer: []
+    }
     room: Lobby
     ready: boolean = false;
     constructor(name: string, socket: Socket, room: Lobby) {
@@ -15,8 +20,7 @@ export class LobbyPlayer extends Player {
     onToggleReady() {
         this.ready = !this.ready;
         console.log(`Player '${this.name}' has toggled ready to: '${this.ready}'`);
-        this.room.sync();
-        this.room.checkReady();
+        this.emit("toggleReady")
     }
     onToggleTimer() {
         console.log(`Player '${this.name}' attempted to start the lobby timer`);
@@ -37,6 +41,6 @@ export class LobbyPlayer extends Player {
             return;
         }
 
-        this.room.toggleTimer();
+        this.emit("toggleTimer");
     }
 }
