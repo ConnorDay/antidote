@@ -17,17 +17,17 @@ export class Loading extends Room {
 
         console.log("Room 'Loading' instantiated.");
 
-        this._listener_events.push("loaded");
+        // this._listener_events.push("loaded");
         this.next_room = next_room;
     }
 
     /**
      * @override
      */
-    addPlayer(player: Player, sync?: boolean) {
+    addPlayer(player: LoadingPlayer, sync?: boolean) {
         super.addPlayer(player, sync);
 
-        this.connected_status[player.id] = false;
+        player.on("loaded", () => this.handlePlayerLoad());
 
         player.socket.on("loaded", () => {
             console.log("got a loaded message");
@@ -50,7 +50,13 @@ export class Loading extends Room {
             }
         });
 
-        player.socket.emit("startLoading");
+    }
+
+    /**
+     * @handler 
+     */
+    handlePlayerLoad(){
+        
     }
 
     sync() {

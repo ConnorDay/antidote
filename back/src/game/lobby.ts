@@ -19,7 +19,6 @@ export class Lobby extends Room {
 
     constructor(code: string, room_factory: () => Room) {
         super(code);
-        this._listener_events.push("toggleReady");
         this.next_room = room_factory;
     }
 
@@ -52,7 +51,6 @@ export class Lobby extends Room {
 
             this._round_start_timeout = setTimeout(() => {
                 console.log(`Room '${this.code}' has started a round`);
-                this.removeListeners();
                 this._callbacks.change_to.forEach((callback) => {
                     callback(new Loading(this.code, this.next_room));
                 });

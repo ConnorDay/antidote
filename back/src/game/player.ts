@@ -2,7 +2,9 @@ import { Socket } from "socket.io";
 import { randomUUID } from "crypto";
 import { Room } from "./room";
 
-export abstract class Player {
+export type Callback = (...args: any[]) => any;
+
+export abstract class Player{
     name: string;
     socket: Socket;
     id: string;

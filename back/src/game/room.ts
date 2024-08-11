@@ -1,12 +1,5 @@
 import { Socket } from "socket.io";
-import { Player } from "./player";
-
-export class PlayerAlreadyExists extends Error {
-    constructor(player: Player) {
-        super(`Player '${player.name}' is already connected to the room.`)
-        this.name = "PlayerAlreadyExists"
-    }
-}
+import {Player } from "./player";
 
 interface Callbacks {
     empty: Array<() => void>;
@@ -14,18 +7,16 @@ interface Callbacks {
 }
 
 export abstract class Room {
-    connected_players: Player[] = [];
-    disconnected_players: Player[] = [];
+    connected_players:Player[] = [];
+    disconnected_players:Player[] = [];
     code: string;
 
-    abstract generatePlayer(name: string, socket: Socket): Player
+    abstract generatePlayer(name: string, socket: Socket):Player
 
     protected _callbacks: Callbacks = {
         empty: [],
         change_to: [],
     };
-
-    protected _listener_events: string[] = ["disconnected"];
 
     constructor(code: string) {
         this.code = code;
@@ -36,12 +27,12 @@ export abstract class Room {
      * @param player the player to add to the room.
      * @throws {PlayerAlreadyExists} if the player name is already in connected_players
      */
-    addPlayer(player: Player, sync: boolean = true) {
+    addPlayer(player:Player, sync: boolean = true) {
         const already_connected_player = this.connected_players.find((target_player) => {
             return target_player.name === player.name;
         });
         if (already_connected_player !== undefined) {
-            throw new PlayerAlreadyExists(player);
+            throw "Player Already Exists";
         }
 
         const reconnecting_player = this.disconnected_players.find((target_player) => {
@@ -68,7 +59,7 @@ export abstract class Room {
      * Removes a player from the room.
      * @param player the player to remove
      */
-    removePlayer(player: Player, sync: boolean = true) {
+    removePlayer(player:Player, sync: boolean = true) {
         this.connected_players = this.connected_players.filter((target_player) => {
             return target_player !== player;
         });
@@ -126,20 +117,9 @@ export abstract class Room {
      * @param player the player to copy
      * @returns the converted player
      */
-    convertPlayer(player: Player): Player{
+    convertPlayer(player:Player):Player{
         const new_player = this.generatePlayer(player.name, player.socket);
         return new_player;
-    }
-
-    /**
-     * Remove listeners in _listener_events from all players
-     */
-    removeListeners() {
-        this._listener_events.forEach((event) => {
-            this.connected_players.forEach((player) => {
-                player.socket.removeAllListeners(event);
-            });
-        });
     }
 
     /**

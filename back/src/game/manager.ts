@@ -61,7 +61,6 @@ export class Manager {
             this.registerListeners(new_room);
             this.all_rooms[room.code] = new_room;
             new_room.copyFrom(room);
-            room.removeListeners();
             new_room.ready();
         });
     }

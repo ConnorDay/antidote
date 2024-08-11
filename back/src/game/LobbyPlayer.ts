@@ -1,5 +1,5 @@
 import { Socket } from "socket.io";
-import { Player } from "./player";
+import { Callback, Player } from "./player";
 import { Lobby } from "./lobby";
 
 export class LobbyPlayer extends Player {
