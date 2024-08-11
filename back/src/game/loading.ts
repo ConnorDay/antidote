@@ -30,8 +30,6 @@ export class Loading extends Room {
 
         player.on("loaded", () => this.handlePlayerLoad());
 
-        player.socket.on("loaded", () => { this.handlePlayerLoad() });
-
     }
 
     /**

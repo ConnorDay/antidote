@@ -16,13 +16,12 @@ export class LoadingPlayer extends EmitablePlayer<Events> {
         super(name, socket, room);
 
         this.socket.on("loaded", () => this.onLoaded());
-        this.socket.emit("startLoading");
     }
 
     onLoaded(){
-            console.log("got a loaded message");
             if (this.loaded) {
                 console.warn(`Player '${this.name}' attempted to connect to room '${this.room.code}', but was already connected`);
+                this.socket.emit("error", {message: 'Already connected into room.'});
                 return;
             }
 

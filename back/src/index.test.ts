@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, test } from "@jest/globals";
 import { io, Socket } from "socket.io-client";
-import { LobbySyncObject } from "../../common/sync-objects";
+import { LoadingSyncObject, LobbySyncObject } from "../../common/sync-objects";
 
 const players: Socket[] = [];
 
@@ -359,4 +359,77 @@ describe("Lobby Testing", () => {
         });
 
     }, 8000);
+
+    test("One player loaded", async () => {
+        const sync_timer = expectAllPredicate(async (player) => {
+            return new Promise((resolve) => {
+                player.once("loadingSync", (sync: LoadingSyncObject[]) => {
+                    sync.forEach((record, index) => {
+                        expect(record.id).toBeDefined();
+                        expect(record.name).toBe(`player${index + 1}`);
+                        expect(record.connected).toBe( index == 0 );
+                    });
+
+                    resolve();
+                });
+            })
+        });
+
+        players[0].emit("loaded");
+        await sync_timer;
+    });
+
+    test("Player can't load in multiple times", async () => {
+        const error_timer = new Promise<void>((resolve, reject) => {
+            players[0].once("error", ({ message }) => {
+                console.log(message);
+                expect(message).toBe("Already connected into room.");
+                resolve();
+            });
+        });
+        const lobby_timer = new Promise<void>((resolve, reject) => {
+            const timer = setTimeout(() => {
+                players[0].off("loadingSync");
+                resolve();
+            }, 500);
+            players[0].once("loadingSync", () => {
+                clearTimeout(timer);
+                console.error("sync message was still sent");
+                reject();
+            });
+        });
+
+        players[0].emit("loaded");
+
+        await Promise.all([error_timer, lobby_timer]);
+    });
+
+    test("The rest of the players load in", async () => {
+        let index = 1;
+        for (let player of players){
+            if (player.id === players[0].id){
+                continue;
+            }
+
+
+            const sync_timer = expectAllPredicate(async (player) => {
+                return new Promise((resolve) => {
+                    player.once("loadingSync", (sync: LoadingSyncObject[]) => {
+                        sync.forEach((record, i) => {
+                            expect(record.id).toBeDefined();
+                            expect(record.name).toBe(`player${i+ 1}`);
+                            expect(record.connected).toBe( i <= index );
+                        });
+
+                        resolve();
+                    });
+                })
+            });
+
+            player.emit("loaded");
+            await sync_timer;
+
+            index++;
+        }
+    });
 });
