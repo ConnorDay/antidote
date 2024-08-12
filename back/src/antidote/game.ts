@@ -216,4 +216,8 @@ export class Antidote extends Room {
             })
         })
     }
+
+    getCurrentPlayerTurnId(){
+        return this.connected_players[this.current_turn].id;
+    }
 }
