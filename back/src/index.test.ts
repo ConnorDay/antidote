@@ -1,9 +1,11 @@
 import { beforeAll, describe, expect, test } from "@jest/globals";
 import { io, Socket } from "socket.io-client";
-import { CardObject, GameSyncObject, LoadingSyncObject, LobbySyncObject } from "../../common/sync-objects";
+import { ActionSyncObject, CardObject, GameSyncObject, LoadingSyncObject, LobbySyncObject } from "../../common/sync-objects";
+import { HandQuery, TurnSelectObject } from "../../common/antidote-objects";
 
 const players: Socket[] = [];
 const hands: CardObject[][] = [];
+const workstations: CardObject[][] = [];
 let turn = -1;
 
 async function expectAllPredicate(predicate: (player: Socket) => Promise<void>) {
@@ -409,6 +411,7 @@ describe("Lobby Testing", () => {
 
         players.forEach(() => {
             hands.push([]);
+            workstations.push([]);
         })
 
         const game_timer = expectAllPredicate(async (player) => {
@@ -417,6 +420,7 @@ describe("Lobby Testing", () => {
 
                     const player_index = players.findIndex( p => p.id === player.id );
                     hands[player_index] = sync.hand;
+                    workstations[player_index] = sync.workstation;
 
                     if (sync.is_turn){
                         expect(turn).toBe(-1);
@@ -491,5 +495,78 @@ describe("Lobby Testing", () => {
         });
 
         expect(suits.size).toBe(1);
-    })
+    });
+
+    test("Send discard request", async () => {
+        const sync_timer = expectAllPredicate(async (player) => {
+            return new Promise((resolve) => {
+                player.once("handQuery", (query: HandQuery) => {
+                    expect(query.can_reject).toBe(false);
+                    expect(query.message).toBe("Discard a card");
+                    expect(query.destination).toBe(undefined);
+
+                    resolve();
+                });
+            })
+        });
+
+        const action_timer = expectAllPredicate(async (player) => {
+            return new Promise((resolve) => {
+                player.once("actionSync", (sync: ActionSyncObject) => {
+                    expect(sync.waiting_on.length).toBe(players.length);
+
+                    resolve();
+                });
+            });
+        });
+
+        const select: TurnSelectObject = {
+            action: "discard"
+        }
+        players[turn].emit("turnSelect", select);
+        await Promise.all([sync_timer, action_timer]);
+    });
+
+    test("Everyone discards", async () => {
+        const sync_timer = expectAllPredicate(async (player) => {
+            return new Promise((resolve) => {
+                player.once("gameSync", (sync: GameSyncObject) => {
+                    const player_index = players.findIndex( p => p.id === player.id );
+                    hands[player_index] = sync.hand;
+                    workstations[player_index] = sync.workstation;
+
+                    if (sync.is_turn){
+                        expect(player_index).toBe( (turn + 1) % players.length );
+                        turn = player_index;
+                    }
+                    resolve();
+                });
+            })
+        });
+        for (let i = 0; i < players.length; i++){
+            const action_timer = expectAllPredicate(async (player) => {
+                return new Promise((resolve) => {
+                    player.once("actionSync", (sync: ActionSyncObject) => {
+                        expect(sync.waiting_on.length).toBe(players.length - 1 - i);
+
+                        resolve();
+                    });
+                });
+            });
+
+            const regular_card = hands[i].find((c) => {return c.value !== "x" && c.suit !== "syringe"});
+
+            players[i].emit("handResponse", regular_card!.id);
+
+            await action_timer;
+        }
+
+        await sync_timer;
+    });
+
+    test("Workstation has a card", () => {
+        workstations.forEach( station => {
+            expect(station.length).toBe(1);
+        });
+    });
 });

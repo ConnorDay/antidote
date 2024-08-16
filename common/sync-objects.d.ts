@@ -18,16 +18,16 @@ export interface CardObject {
 export interface PlayerStatusObject {
     name: string;
     id: string;
-    has_played?: boolean;
+    workstation: CardObject[];
     is_turn: boolean;
 }
 export interface GameSyncObject {
     players: PlayerStatusObject[];
     hand: CardObject[];
+    workstation: CardObject[];
     is_turn: boolean;
 }
 
 export interface ActionSyncObject {
-    message: string;
     waiting_on: string[];
 }

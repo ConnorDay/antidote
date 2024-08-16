@@ -1,9 +1,8 @@
 import { Socket } from "socket.io";
 import { Lobby } from "./lobby";
-import { EmitablePlayer } from "./EmitablePlayer";
-import { Callback } from "./player";
+import { EmittablePlayer } from "./EmittablePlayer";
 
-export class LobbyPlayer extends EmitablePlayer<"toggleReady"|"toggleTimer">{
+export class LobbyPlayer extends EmittablePlayer<"toggleReady"|"toggleTimer">{
     event_callbacks = {
         toggleReady: [],
         toggleTimer: []

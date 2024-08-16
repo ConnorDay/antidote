@@ -1,6 +1,6 @@
 import { Callback, Player } from "./player";
 
-export abstract class EmitablePlayer<T extends string> extends Player{
+export abstract class EmittablePlayer<T extends string> extends Player{
     abstract event_callbacks: {
         [key in T]: Callback[];
     };

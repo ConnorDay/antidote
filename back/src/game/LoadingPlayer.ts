@@ -1,10 +1,10 @@
 import { Socket } from "socket.io";
 import { Loading } from "./loading";
-import { EmitablePlayer } from "./EmitablePlayer";
+import { EmittablePlayer } from "./EmittablePlayer";
 
 type Events = "loaded" | "fegli";
 
-export class LoadingPlayer extends EmitablePlayer<Events> {
+export class LoadingPlayer extends EmittablePlayer<Events> {
     room!: Loading;
     loaded: boolean = false;
     event_callbacks = {
