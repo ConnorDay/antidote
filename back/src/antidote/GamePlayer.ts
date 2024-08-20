@@ -26,7 +26,7 @@ export class GamePlayer extends EmittablePlayer<events> {
     }
 
     handleTurnSelect(select: TurnSelectObject) {
-        console.log(`Got a turn select from '${this.name}'`)
+        console.log(`Got a turn select from '${this.name}', action: ${select.action}, argument: ${select.argument}`)
         if ( this.room.getCurrentPlayerTurnId() != this.id ){
             console.log(`Current turn does not belong to Player '${this.name}'`);
             this.socket.emit("error", { message: "Not your turn." });

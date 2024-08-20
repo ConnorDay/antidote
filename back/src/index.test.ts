@@ -570,7 +570,7 @@ describe("Lobby Testing", () => {
         });
     });
 
-    test("Send pass request (left)", async () => {
+    async function send_pass_request(direction: "left"|"right"){
         const sync_timer = expectAllPredicate(async (player) => {
             return new Promise((resolve) => {
                 player.once("handQuery", (query: HandQuery) => {
@@ -595,13 +595,13 @@ describe("Lobby Testing", () => {
 
         const select: TurnSelectObject = {
             action: "pass",
-            argument: "left"
+            argument: direction
         }
         players[turn].emit("turnSelect", select);
         await Promise.all([sync_timer, action_timer]);
-    })
+    }
 
-    test("Pass to left", async () => {
+    async function send_pass_hand_responses(direction: "left"|"right"){
         const to_expect: string[] = Array(players.length);
 
         const sync_timer = expectAllPredicate(async (player) => {
@@ -636,12 +636,24 @@ describe("Lobby Testing", () => {
             });
 
             players[i].emit("handResponse", hands[i][0].id);
-            to_expect[ (i + to_expect.length - 1) % to_expect.length ] = hands[i][0].id;
+            const offset = direction === "left" ? -1 : 1;
+            to_expect[ (i + to_expect.length + offset) % to_expect.length ] = hands[i][0].id;
 
             await action_timer;
         }
 
         await sync_timer;
 
+    }
+
+    test("pass to the left", async () => {
+        await send_pass_request("left");
+        await send_pass_hand_responses("left");
     });
+
+    test("pass to the right", async () => {
+        await send_pass_request("right");
+        await send_pass_hand_responses("right");
+    })
+
 });
