@@ -656,4 +656,185 @@ describe("Lobby Testing", () => {
         await send_pass_hand_responses("right");
     })
 
+    async function send_trade_request(){
+        const current_player = players[turn]
+        const target_player_socket = turn === 0 ? players[1] : players[0];
+
+        const sync = await new Promise<GameSyncObject>((resolve) => {
+            current_player.once("gameSync", (sync: GameSyncObject) => {
+                resolve(sync);
+            });
+
+            current_player.emit("resync");
+        });
+
+        const target_player_id: string = sync.players[0].id;
+
+        const action_timer = expectAllPredicate(async (player) => {
+            return new Promise((resolve) => {
+                player.once("actionSync", (sync: ActionSyncObject) => {
+                    expect(sync.waiting_on.length).toBe(1);
+
+                    resolve();
+                });
+            });
+        });
+
+        const sync_timer = new Promise<void>((resolve) => {
+            target_player_socket.once("handQuery", (query: HandQuery) => {
+                expect(query.can_reject).toBe(true);
+                expect(query.message).toBe("Trade a card");
+                expect(query.destination).toBe(sync.id);
+
+                resolve();
+            });
+        });
+
+        const select: TurnSelectObject = {
+            action: "trade",
+            argument: target_player_id,
+        }
+        players[turn].emit("turnSelect", select);
+        await Promise.all([sync_timer, action_timer]);
+
+        return [sync.id, target_player_id];
+    }
+
+    function query_response(player_index: number, card_index?:number){
+        let target: string | undefined = undefined;
+        if (card_index !== undefined){
+            target = hands[player_index][card_index].id;
+        }
+
+        players[player_index].emit("handResponse", target);
+        return target;
+    }
+
+    test("Trade target rejects", async () => {
+        await send_trade_request();
+        const sync_timer = expectAllPredicate(async (player) => {
+            return new Promise((resolve) => {
+                player.once("gameSync", (sync: GameSyncObject) => {
+                    const player_index = players.findIndex( p => p.id === player.id );
+                    hands[player_index] = sync.hand;
+                    workstations[player_index] = sync.workstation;
+
+                    if (sync.is_turn){
+                        expect(player_index).toBe(turn);
+                    }
+                    resolve();
+                });
+            })
+        });
+
+        query_response( turn === 0 ? 1 : 0, undefined );
+
+        await sync_timer;
+    });
+
+    test("Trade current player cancelled", async () => {
+        const [current_player_id, target_player_id] = await send_trade_request();
+
+        const action_timer = expectAllPredicate(async (player) => {
+            return new Promise((resolve) => {
+                player.once("actionSync", (sync: ActionSyncObject) => {
+                    expect(sync.waiting_on.length).toBe(1);
+
+                    resolve();
+                });
+            });
+        });
+
+        const hand_timer = new Promise<void>((resolve) => {
+            players[turn].once("handQuery", (query: HandQuery) => {
+                expect(query.can_reject).toBe(true);
+                expect(query.message).toBe("Trade a card");
+                expect(query.destination).toBe(target_player_id);
+
+                resolve();
+            });
+        });
+
+        query_response( turn === 0 ? 1 : 0, 0 );
+        await Promise.all([action_timer, hand_timer]);
+        
+        const sync_timer = expectAllPredicate(async (player) => {
+            return new Promise((resolve) => {
+                player.once("gameSync", (sync: GameSyncObject) => {
+                    const player_index = players.findIndex( p => p.id === player.id );
+                    hands[player_index] = sync.hand;
+                    workstations[player_index] = sync.workstation;
+
+                    if (sync.is_turn){
+                        expect(player_index).toBe(turn);
+                    }
+                    resolve();
+                });
+            })
+        });
+
+        query_response( turn, undefined );
+        await sync_timer;
+    });
+
+    test("Trade successfully", async () => {
+        const [current_player_id, target_player_id] = await send_trade_request();
+
+        const action_timer = expectAllPredicate(async (player) => {
+            return new Promise((resolve) => {
+                player.once("actionSync", (sync: ActionSyncObject) => {
+                    expect(sync.waiting_on.length).toBe(1);
+
+                    resolve();
+                });
+            });
+        });
+
+        const hand_timer = new Promise<void>((resolve) => {
+            players[turn].once("handQuery", (query: HandQuery) => {
+                expect(query.can_reject).toBe(true);
+                expect(query.message).toBe("Trade a card");
+                expect(query.destination).toBe(target_player_id);
+
+                resolve();
+            });
+        });
+
+        const target_card = query_response( turn === 0 ? 1 : 0, 0 );
+        expect(target_card).toBeDefined();
+        await Promise.all([action_timer, hand_timer]);
+
+        let source_card: string|undefined;
+
+        const sync_timer = expectAllPredicate(async (player) => {
+            return new Promise((resolve) => {
+                player.once("gameSync", (sync: GameSyncObject) => {
+                    const player_index = players.findIndex( p => p.id === player.id );
+                    hands[player_index] = sync.hand;
+                    workstations[player_index] = sync.workstation;
+
+                    if (sync.id === current_player_id){
+                        const found_card = sync.hand.find( c => c.id === target_card);
+                        expect(found_card).toBeDefined();
+                    } else if (sync.id === target_player_id){
+                        const found_card = sync.hand.find( c => c.id === source_card);
+                        expect(found_card).toBeDefined();
+                    }
+
+                    if (sync.is_turn){
+                        expect(player_index).toBe( (turn + 1) % players.length );
+                        turn = player_index;
+                    }
+                    resolve();
+                });
+            });
+        });
+
+
+        source_card = query_response( turn, 0 );
+        expect(source_card).toBeDefined();
+
+        await sync_timer;
+    });
+
 });

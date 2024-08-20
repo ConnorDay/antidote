@@ -23,6 +23,11 @@ export class GamePlayer extends EmittablePlayer<events> {
         this.room = room;
 
         this.socket.on("turnSelect", (select: TurnSelectObject) => this.handleTurnSelect(select))
+        this.socket.on("resync", () => this.handleResync())
+    }
+
+    handleResync(){
+        this.room.sync();
     }
 
     handleTurnSelect(select: TurnSelectObject) {
@@ -77,7 +82,7 @@ export class GamePlayer extends EmittablePlayer<events> {
     }
     handleTradeAction(target?: string) {
         if (target === undefined){
-            console.warn(`Player '${this.name}' did not provide a target`);
+            console.error(`Player '${this.name}' did not provide a target`);
             this.socket.emit("error", {message: "No target provided"});
             return;
         }
@@ -89,6 +94,8 @@ export class GamePlayer extends EmittablePlayer<events> {
             return;
         }
 
+        console.log(`Player '${this.name}' initiated a trade request with Player '${target_player.name}'`)
+        this.waiting = false;
         this.emit("actionSelected", "trade", target);
         
     }
@@ -103,14 +110,14 @@ export class GamePlayer extends EmittablePlayer<events> {
         }
 
         this.hand.splice( index, 1 );
-        this.workstation.push(card);
     }
 
     async queryHand(message: string, can_reject: boolean, destination?: string){
+        console.log(`Sending hand query to Player '${this.name}'`);
         return new Promise<Card|undefined>( ( accept, reject ) => {
-            const responseCallback = ( card_id?: string ) => {
+            const responseCallback = ( card_id: string|null ) => {
                 console.log(`Got a query hand response from Player '${this.name}': '${card_id}'`)
-                if (card_id === undefined && !can_reject){
+                if (card_id === null && !can_reject){
                     console.warn(`Player '${this.name}' attempted to reject an unrejectable query.`)
                     this.socket.emit("error", "cannot reject this request.");
                     return;
@@ -118,7 +125,7 @@ export class GamePlayer extends EmittablePlayer<events> {
 
                 let target_card = undefined;
 
-                if (card_id !== undefined){
+                if (card_id !== null){
                     target_card = this.hand.find(c => c.id === card_id);
                     if (target_card === undefined) {
                         console.warn(`Could not find card with id '${card_id}' for Player '${this.name}'`);

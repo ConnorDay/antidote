@@ -25,6 +25,7 @@ export interface GameSyncObject {
     players: PlayerStatusObject[];
     hand: CardObject[];
     workstation: CardObject[];
+    id: string;
     is_turn: boolean;
 }
 

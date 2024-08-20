@@ -34,30 +34,74 @@ export class Antidote extends Room {
 
     async handleActionSelect( action: ActionType, argument?: string){
         this.current_action = action;
+        let update_turn = false;
         switch (action){
             case "discard":
-                await this.handleDiscard();
+                update_turn = await this.handleDiscard();
                 break;
             case "trade":
+                update_turn = await this.handleTrade(argument);
                 break;
             case "use":
                 break;
             case "pass":
-                await this.handlePass(argument);
+                update_turn = await this.handlePass(argument);
                 break;
             default:
                 console.error(`Unhandled action '${action}' passed to game room.`)
                 return;
         }
 
-        this.updateTurn(this.current_turn + 1);
+        if ( update_turn ){
+            this.updateTurn(this.current_turn + 1);
+        } else {
+            this.updateTurn(this.current_turn);
+        }
         this.sync();
 
     }
 
-    async handlePass( direction?: string ){
+    async handleTrade( target_player_id?: string ): Promise<boolean>{
+        if (target_player_id === undefined){
+            throw "Player id must be defined";
+        }
+        const target_player = this.connected_players.find( p => p.id === target_player_id );
+
+        if (target_player === undefined){
+            throw `Unable to find connected player with id '${target_player_id}'`
+        }
+
+
+        const current_player = this.turn_order[this.current_turn];
+
+        const target_query = target_player.queryHand("Trade a card", true, this.getCurrentPlayerTurnId());
+        this.actionSync();
+        const target_card = await target_query;
+        if (target_card === undefined){
+            console.log(`Player '${target_player.name}' has rejected the trade request from Player '${current_player.name}' `);
+            return false;
+        }
+
+        const source_query = current_player.queryHand("Trade a card", true, target_player.id);
+        this.actionSync();
+        const source_card = await source_query
+        if (source_card === undefined){
+            console.log(`Player '${current_player.name}' has cancelled the trade request.`);
+            return false;
+        }
+
+        target_player.discard(target_card);
+        current_player.discard(source_card);
+
+        target_player.hand.push(source_card);
+        current_player.hand.push(target_card);
+
+        return true;
+    }
+
+    async handlePass( direction?: string ): Promise<boolean>{
         if (direction === undefined){
-            throw `No direction passed`;
+            throw `Direction must be passed`;
         }
 
         let offset = 0;
@@ -80,12 +124,7 @@ export class Antidote extends Room {
                     throw `Invalid query response for Player '${player.name}'`;
                 }
 
-                const hand_index = player.hand.indexOf(card);
-                if (hand_index < 0){
-                    throw "unable to find card";
-                }
-
-                player.hand.splice( hand_index, 1 );
+                player.discard(card);
 
                 const player_index = this.turn_order.indexOf(player);
                 const next_player_index = ( this.turn_order.length + player_index + offset ) % this.turn_order.length;
@@ -109,9 +148,10 @@ export class Antidote extends Room {
             const target_player = this.turn_order.find( p => p.id == dto.player );
             target_player?.hand.push(dto.card);
         });
+        return true;
     }
 
-    async handleDiscard(){
+    async handleDiscard(): Promise<boolean>{
         const queries: Promise<Card|undefined>[] = [];
         this.connected_players.forEach( (player) => {
             const query = player.queryHand("Discard a card", false);
@@ -122,6 +162,7 @@ export class Antidote extends Room {
                 }
 
                 player.discard(card);
+                player.workstation.push(card);
                 
                 this.actionSync();
             });
@@ -132,6 +173,7 @@ export class Antidote extends Room {
         this.actionSync();
 
         await Promise.all(queries);
+        return true;
     }
 
     sync() {
@@ -148,9 +190,9 @@ export class Antidote extends Room {
 
                 const is_turn = this.getCurrentPlayerTurnId() === player.id;
                 status.push({
-                    name: player.name,
-                    id: player.id,
-                    workstation: player.getHiddenWorkstation(),
+                    name: sub_player.name,
+                    id: sub_player.id,
+                    workstation: sub_player.getHiddenWorkstation(),
                     is_turn: is_turn,
                 });
             });
@@ -160,6 +202,7 @@ export class Antidote extends Room {
                 players: status,
                 hand: player.hand,
                 workstation: player.workstation,
+                id: player.id,
                 is_turn: is_turn
             }
             player.socket.emit("gameSync", sync)
