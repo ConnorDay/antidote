@@ -32,21 +32,83 @@ export class Antidote extends Room {
         player.on("actionSelected", (action: ActionType, argument?: string) => {this.handleActionSelect(action, argument)} );
     }
 
-    handleActionSelect( action: ActionType, argument?: string){
+    async handleActionSelect( action: ActionType, argument?: string){
         this.current_action = action;
         switch (action){
             case "discard":
-                this.handleDiscard();
+                await this.handleDiscard();
                 break;
             case "trade":
                 break;
             case "use":
                 break;
             case "pass":
+                await this.handlePass(argument);
                 break;
             default:
                 console.error(`Unhandled action '${action}' passed to game room.`)
+                return;
         }
+
+        this.updateTurn(this.current_turn + 1);
+        this.sync();
+
+    }
+
+    async handlePass( direction?: string ){
+        if (direction === undefined){
+            throw `No direction passed`;
+        }
+
+        let offset = 0;
+
+        if (direction === "left"){
+            offset = -1;
+        } else if (direction === "right"){
+            offset = 1;
+        } else {
+            throw `unknown direction ${direction}`;
+        }
+
+        const queries: Promise<Card|undefined>[] = [];
+        const cards: {player: string, card: Card}[] = [];
+        this.connected_players.forEach( (player) => {
+            const query = player.queryHand("Pass a card", false);
+
+            query.then( (card) => {
+                if (card === undefined){
+                    throw `Invalid query response for Player '${player.name}'`;
+                }
+
+                const hand_index = player.hand.indexOf(card);
+                if (hand_index < 0){
+                    throw "unable to find card";
+                }
+
+                player.hand.splice( hand_index, 1 );
+
+                const player_index = this.turn_order.indexOf(player);
+                const next_player_index = ( this.turn_order.length + player_index + offset ) % this.turn_order.length;
+                const next_player = this.turn_order[next_player_index];
+
+                cards.push({
+                    player: next_player.id,
+                    card: card
+                });
+                
+                this.actionSync();
+            });
+
+            queries.push(query);
+        });
+
+        this.actionSync();
+
+        await Promise.all(queries);
+        cards.forEach( dto => {
+            const target_player = this.turn_order.find( p => p.id == dto.player );
+            target_player?.hand.push(dto.card);
+        });
     }
 
     async handleDiscard(){
@@ -70,9 +132,6 @@ export class Antidote extends Room {
         this.actionSync();
 
         await Promise.all(queries);
-
-        this.updateTurn(this.current_turn + 1);
-        this.sync();
     }
 
     sync() {

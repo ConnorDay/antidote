@@ -569,4 +569,79 @@ describe("Lobby Testing", () => {
             expect(station.length).toBe(1);
         });
     });
+
+    test("Send pass request (left)", async () => {
+        const sync_timer = expectAllPredicate(async (player) => {
+            return new Promise((resolve) => {
+                player.once("handQuery", (query: HandQuery) => {
+                    expect(query.can_reject).toBe(false);
+                    expect(query.message).toBe("Pass a card");
+                    expect(query.destination).toBe(undefined);
+
+                    resolve();
+                });
+            })
+        });
+
+        const action_timer = expectAllPredicate(async (player) => {
+            return new Promise((resolve) => {
+                player.once("actionSync", (sync: ActionSyncObject) => {
+                    expect(sync.waiting_on.length).toBe(players.length);
+
+                    resolve();
+                });
+            });
+        });
+
+        const select: TurnSelectObject = {
+            action: "pass",
+            argument: "left"
+        }
+        players[turn].emit("turnSelect", select);
+        await Promise.all([sync_timer, action_timer]);
+    })
+
+    test("Pass to left", async () => {
+        const to_expect: string[] = Array(players.length);
+
+        const sync_timer = expectAllPredicate(async (player) => {
+            return new Promise((resolve) => {
+                player.once("gameSync", (sync: GameSyncObject) => {
+                    const player_index = players.findIndex( p => p.id === player.id );
+                    hands[player_index] = sync.hand;
+                    workstations[player_index] = sync.workstation;
+
+                    const expected_card = to_expect[player_index];
+                    const found_card = sync.hand.find( c => c.id === expected_card );
+                    expect( found_card ).toBeDefined();
+
+                    if (sync.is_turn){
+                        expect(player_index).toBe( (turn + 1) % players.length );
+                        turn = player_index;
+                    }
+                    resolve();
+                });
+            })
+        });
+
+        for (let i = 0; i < players.length; i++){
+            const action_timer = expectAllPredicate(async (player) => {
+                return new Promise((resolve) => {
+                    player.once("actionSync", (sync: ActionSyncObject) => {
+                        expect(sync.waiting_on.length).toBe(players.length - 1 - i);
+
+                        resolve();
+                    });
+                });
+            });
+
+            players[i].emit("handResponse", hands[i][0].id);
+            to_expect[ (i + to_expect.length - 1) % to_expect.length ] = hands[i][0].id;
+
+            await action_timer;
+        }
+
+        await sync_timer;
+
+    });
 });

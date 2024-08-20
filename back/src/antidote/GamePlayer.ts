@@ -50,7 +50,7 @@ export class GamePlayer extends EmittablePlayer<events> {
                 this.handleUseAction(select.argument);
                 break;
             case "pass":
-                this.handlePassAction();
+                this.handlePassAction(select.argument);
                 break;
             default:
                 console.error("Unhandled action passed.");
@@ -60,16 +60,20 @@ export class GamePlayer extends EmittablePlayer<events> {
     }
 
     handleDiscardAction() {
-        // const card = this.hand.find( c => c.id === card_id )
-        // if (card === undefined) {
-        //     this.socket.emit("error", `Unable to find card with id ${card_id}`);
-        //     return;
-        // }
         this.emit("actionSelected", "discard")
-
     }
-    handlePassAction(){
-        this.emit("actionSelected", "pass")
+    handlePassAction( direction?: string){
+        if (direction === undefined){
+            console.warn(`Player '${this.name}' did not provide a direction`);
+            this.socket.emit("error", {message: "No direction provided"});
+            return;
+        }
+        if (direction !== "left" && direction !== "right"){
+            console.warn(`Player '${this.name}' did not provide a valid direction: ${direction}`);
+            this.socket.emit("error", {message: `'${direction}' is not a valid direction`});
+            return;
+        }
+        this.emit("actionSelected", "pass", direction);
     }
     handleTradeAction(target?: string) {
         if (target === undefined){
