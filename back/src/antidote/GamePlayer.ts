@@ -52,7 +52,7 @@ export class GamePlayer extends EmittablePlayer<events> {
                 this.handleTradeAction(select.argument);
                 break;
             case "use":
-                this.handleUseAction(select.argument);
+                this.handleUseAction(select.argument, select.argument2, select.argument3);
                 break;
             case "pass":
                 this.handlePassAction(select.argument);
@@ -99,7 +99,43 @@ export class GamePlayer extends EmittablePlayer<events> {
         this.emit("actionSelected", "trade", target);
         
     }
-    handleUseAction(target?: string) {
+    handleUseAction(card?: string, target_type?: string, target_id?: string) {
+        if (card === undefined || card === null){
+            console.error(`Player '${this.name}' did not provide a card`);
+            this.socket.emit("error", {message: "No card provided"});
+            return;
+        }
+        const found_card = this.hand.find(c => c.id === card);
+        if (found_card === undefined) {
+            console.error(`Could not find a card with id '${card}' in the hand of Player '${this.name}'`);
+            this.socket.emit("error", {message: "Could not find provided card"});
+            return;
+        }
+        const playable_cards = ["syringe"];
+        if ( found_card.suit === undefined || !playable_cards.includes( found_card.suit) ){
+            console.error(`Player '${this.name}' attempted to play a card with suit '${found_card.suit}'`);
+            this.socket.emit("error", {message: "Invalid card"});
+            return;
+        }
+
+        if (target_type === undefined || card === null){
+            console.error(`Player '${this.name}' did not provide a target type`);
+            this.socket.emit("error", {message: "No target type provided"});
+            return;
+        }
+        if (target_type !== "card" && target_type !== "player"){
+            console.error(`Player '${this.name}' provided an invalid target type '${target_type}'`);
+            this.socket.emit("error", {message: "Invalid target type"});
+            return;
+        }
+
+        if (target_id === undefined || card === null){
+            console.error(`Player '${this.name}' did not provide a target id`);
+            this.socket.emit("error", {message: "No target id provided"});
+            return;
+        }
+
+        this.emit("actionSelected", "use", card, target_type, target_id)
 
     }
 

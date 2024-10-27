@@ -5,6 +5,8 @@ export type ActionType = "discard" | "trade" | "use" | "pass";
 export interface TurnSelectObject {
     action: ActionType;
     argument?: string;
+    argument2?: string;
+    argument3?: string;
 }
 
 export interface TurnActionObject {

@@ -8,7 +8,7 @@ import { Card } from "../../components/Card";
 
 function handlePlayerClick(player: PlayerStatusObject) {
     const { socket } = Global;
-    socket.emit("turnAction", {
+    socket.emit("turnSelect", {
         action: "trade",
         argument: player.id
     });

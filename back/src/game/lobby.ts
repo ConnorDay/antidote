@@ -4,7 +4,7 @@ import { Loading } from "./loading";
 import { LobbyPlayer } from "./LobbyPlayer";
 import { Socket } from "socket.io";
 
-const START_DELAY = .5 * 1000;
+const START_DELAY = 3 * 1000;
 
 export class Lobby extends Room {
 

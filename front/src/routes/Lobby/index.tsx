@@ -15,23 +15,34 @@ function handleReady() {
     socket.emit("toggleReady");
 }
 
-function processTime(time?: number) {
-    if (time === undefined) {
+function handleStart() {
+    const { socket } = Global;
+    socket.emit("toggleTimer")
+}
+
+function processTime(all_ready: boolean, time?: number) {
+    if (!all_ready){
         return "Waiting for players to ready";
+    }
+    if (time === undefined) {
+        return "Waiting for host to start";
     }
     return `${time}`;
 }
 
 function Lobby() {
-    const { socket, setDisplay } = Global;
+    const { socket, setDisplay, connectionInfo } = Global;
+    const {name} = connectionInfo;
 
     const [players, setPlayers] = useState<LobbySyncObject[]>([]);
     const [start_time, setTime] = useState<number>();
     const [display_time, setDisplayTime] = useState<number>();
+    const [all_ready, setAllReady] = useState<boolean>(false);
 
     useEffect(() => {
         socket.on("lobbySync", (playerList: LobbySyncObject[]) => {
             setPlayers(playerList);
+            setAllReady( playerList.every( (p) => p.ready ) )
         });
         socket.on("roundTimerStart", (start: number) => {
             console.log(start);
@@ -41,7 +52,7 @@ function Lobby() {
             setTime(undefined);
             setDisplayTime(undefined);
         })
-        socket.on("startLoading", () => {
+        socket.on("roomChange", () => {
             setDisplay(Pages.Game);
         })
 
@@ -89,9 +100,10 @@ function Lobby() {
                     </div>
                 </aside>
                 <section className='lobby-configuration'>
-                    <div className='lobby-timer'>{processTime(display_time)}</div>
+                    <div className='lobby-timer'>{processTime(all_ready, display_time)}</div>
                     <div className='lobby-options'>Game options will go here eventually :)</div>
                     <button onClick={() => handleReady()}>Ready</button>
+                    {all_ready && players[0]?.name === name ? <button onClick={() => handleStart()}>Start</button> : undefined}
                 </section>
             </div>
         </main>

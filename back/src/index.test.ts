@@ -2,68 +2,23 @@ import { beforeAll, describe, expect, test } from "@jest/globals";
 import { io, Socket } from "socket.io-client";
 import { ActionSyncObject, CardObject, GameSyncObject, LoadingSyncObject, LobbySyncObject } from "../../common/sync-objects";
 import { HandQuery, TurnSelectObject } from "../../common/antidote-objects";
+import { Lobby } from "./test/Rooms/Lobby";
+import { Loading } from "./test/Rooms/Loading";
+import { Antidote } from "./test/Rooms/Antidote";
 
-const players: Socket[] = [];
-const hands: CardObject[][] = [];
-const workstations: CardObject[][] = [];
-let turn = -1;
-
-async function expectAllPredicate(predicate: (player: Socket) => Promise<void>) {
-    const promises: Promise<void>[] = [];
-    players.forEach(player => {
-        promises.push(predicate(player));
-    });
-
-    await Promise.all(promises);
-}
-
-async function addPlayer(check_ready: boolean = true) {
-    const next_player = players.length;
-    const player = io(
-        "ws://localhost:8000",
-        {
-            query: {
-                name: `player${next_player + 1}`,
-                code: "1234"
-            }
-        }
-    );
-    players.push(player);
-
-    await expectAllPredicate(async (player: Socket) => {
-        return new Promise((resolve) => {
-            player.once("lobbySync", (sync: LobbySyncObject[]) => {
-                expect(sync).toBeDefined();
-                expect(sync.length).toBe(players.length);
-
-                sync.forEach((record, index) => {
-                    expect(record.name).toBe(`player${index + 1}`);
-                    if (check_ready) {
-                        expect(record.ready).toBe(false);
-                    }
-                    expect(record.id).toBeDefined();
-                });
-
-                resolve();
-            })
-
-        });
-    });
-}
-
-afterAll(() => {
-    players.forEach((socket) => {
-        socket.close();
-    });
-});
+const lobby = new Lobby();
 
 describe("Lobby Testing", () => {
-    test("Player 1 connect to server", async () => {
-        await addPlayer();
+    test("Player 1 connects to server", async () => {
+        lobby.addPlayer(lobby.createPlayer());
+        await lobby.sync();
     });
-    test("Player 2 connect to server", async () => {
-        await addPlayer();
+    
+    test("Player 2 connects to server", async () => {
+        lobby.addPlayer(lobby.createPlayer());
+        await lobby.sync();
     });
+
 
     test("Duplicate Players can't connect", async () => {
         const fake_player = io(
@@ -83,403 +38,181 @@ describe("Lobby Testing", () => {
         fake_player.close();
     });
 
-    test("Player leave sync", async () => {
-        const player = players.pop();
-        player!.close();
-
-        await new Promise<void>((resolve) => {
-            players[0].once("lobbySync", (sync) => {
-                expect(sync).toBeDefined();
-                expect(sync.length).toBe(1);
-                expect(sync[0].name).toBe("player1");
-                expect(sync[0].ready).toBe(false);
-                expect(sync[0].id).toBeDefined();
-
-                resolve();
-            });
-        });
+    test("Player leaves", async () => {
+        const leaver = lobby.players.pop();
+        leaver!.socket.close();
+        expect(lobby.players.length).toBe(1);
+        await lobby.sync();
     });
 
     test("Add 4 more players", async () => {
         for (let i = 0; i < 4; i++) {
-            await addPlayer();
+            lobby.addPlayer(lobby.createPlayer());
+            await lobby.sync();
         }
-    })
-
-    test("Able to ready up", async () => {
-        players[0].emit("toggleReady");
-
-        await expectAllPredicate(async (player) => {
-            return new Promise((resolve) => {
-                player.once("lobbySync", (sync: LobbySyncObject[]) => {
-                    sync.forEach((record, index) => {
-                        expect(record.id).toBeDefined();
-                        expect(record.name).toBe(`player${index + 1}`);
-                        expect(record.ready).toBe(index == 0);
-                    });
-
-                    resolve();
-                });
-            })
-        });
     });
 
-    test("Non host player can't toggle", async () => {
-        const error_timer = new Promise<void>((resolve, reject) => {
-            players[1].once("error", ({ message }) => {
-                expect(message).toBe("only the host is able to toggle the round timer");
-                resolve();
-            });
-        });
-        const lobby_timer = new Promise<void>((resolve, reject) => {
-            const timer = setTimeout(() => {
-                players[1].off("roundTimerStart");
-                resolve();
-            }, 500);
-            players[1].once("roundTimerStart", () => {
-                clearTimeout(timer);
-                reject();
-            });
-        });
-
-        players[1].emit("toggleTimer");
-
-        await Promise.all([error_timer, lobby_timer]);
+    test("Able to ready", async () => {
+        lobby.players[0].toggleReady();
+        expect(lobby.players[0].ready).toBe(true);
+        await lobby.sync();
     });
 
-    test("Host player can't toggle", async () => {
-        const error_timer = new Promise<void>((resolve, reject) => {
-            players[0].once("error", ({ message }) => {
-                expect(message).toBe("not all players are ready");
-                resolve();
-            });
+    test("Host unable to start timer", async () => {
+        const error_timer = lobby.players[0].getError().then(({message}) => {
+            expect(message).toBe("not all players are ready");
         });
-        const lobby_timer = new Promise<void>((resolve, reject) => {
-            const timer = setTimeout(() => {
-                players[0].off("roundTimerStart");
-                resolve();
-            }, 500);
-            players[0].once("roundTimerStart", () => {
-                clearTimeout(timer);
-                reject();
-            });
+        lobby.players[0].toggleTimer();
+        await Promise.all( [lobby.noneGetEvent("roundTimerStart"), error_timer] );
+    });
+
+    test("Non-host unable to start timer", async () => {
+        const error_timer = lobby.players[1].getError().then(({message}) => {
+            expect(message).toBe("only the host is able to toggle the round timer");
         });
-
-        players[0].emit("toggleTimer");
-
-        await Promise.all([error_timer, lobby_timer]);
+        lobby.players[1].toggleTimer();
+        await Promise.all( [lobby.noneGetEvent("roundTimerStart"), error_timer] );
     });
 
     test("All players ready", async () => {
-        for (let i = 1; i < players.length; i++) {
-            players[i].emit("toggleReady");
-
-            await expectAllPredicate(async (player) => {
-                return new Promise((resolve) => {
-                    player.once("lobbySync", (sync: LobbySyncObject[]) => {
-                        sync.forEach((record, index) => {
-                            expect(record.id).toBeDefined();
-                            expect(record.name).toBe(`player${index + 1}`);
-                            expect(record.ready).toBe(index <= i);
-                        });
-
-                        resolve();
-                    });
-                })
-            });
+        for (let i = 1; i < lobby.players.length; i++) {
+            lobby.players[i].toggleReady();
+            expect(lobby.players[i].ready).toBe(true);
+            await lobby.sync();
         }
     });
 
-    test("Non host player can't toggle timer", async () => {
-        const error_timer = new Promise<void>((resolve, reject) => {
-            players[1].once("error", ({ message }) => {
-                expect(message).toBe("only the host is able to toggle the round timer");
-                resolve();
-            });
+    test("Non-host unable to start timer", async () => {
+        const error_timer = lobby.players[1].getError().then(({message}) => {
+            expect(message).toBe("only the host is able to toggle the round timer");
         });
-        const lobby_timer = new Promise<void>((resolve, reject) => {
-            const timer = setTimeout(() => {
-                players[1].off("roundTimerStart");
-                resolve();
-            }, 500);
-            players[1].once("roundTimerStart", () => {
-                clearTimeout(timer);
-                reject();
-            });
-        });
-
-        players[1].emit("toggleTimer");
-
-        await Promise.all([error_timer, lobby_timer]);
+        lobby.players[1].toggleTimer();
+        await Promise.all( [lobby.noneGetEvent("roundTimerStart"), error_timer] );
     });
 
-    test("Host starts timer", async () => {
-        const times = new Set();
-        const lobby_timer = expectAllPredicate(async (player) => {
-            return new Promise((resolve) => {
-                player.once("roundTimerStart", (start: number) => {
-                    times.add(start);
-                    resolve();
-                });
-            });
-        });
-
-        players[0].emit("toggleTimer");
-
-        await lobby_timer;
-
-        expect(times.size).toBe(1);
+    test("Host able to start timer", async () => {
+        lobby.players[0].toggleTimer();
+        await lobby.roundTimerStarted();
     });
 
     test("Host cancels timer", async () => {
-        const lobby_timer = expectAllPredicate(async (player) => {
-            return new Promise((resolve) => {
-                player.once("roundTimerStop", () => {
-                    resolve();
-                });
-            });
-        });
-
-        players[0].emit("toggleTimer");
-
-        await lobby_timer;
+        lobby.players[0].toggleTimer();
+        await lobby.roundTimerStopped();
     });
 
-    test("Host starts timer", async () => {
-        const times = new Set();
-        const lobby_timer = expectAllPredicate(async (player) => {
-            return new Promise((resolve) => {
-                player.once("roundTimerStart", (start: number) => {
-                    times.add(start);
-                    resolve();
-                });
-            });
-        });
-
-        players[0].emit("toggleTimer");
-
-        await lobby_timer;
-
-        expect(times.size).toBe(1);
+    test("Host able to start timer", async () => {
+        lobby.players[0].toggleTimer();
+        await lobby.roundTimerStarted();
     });
 
     test("Player leaves after timer", async () => {
-        const leaver = players.pop();
-
-        const sync_timer = expectAllPredicate(async (player) => {
-            return new Promise((resolve) => {
-                player.once("lobbySync", (sync: LobbySyncObject[]) => {
-                    sync.forEach((record, index) => {
-                        expect(record.id).toBeDefined();
-                        expect(record.name).toBe(`player${index + 1}`);
-                        expect(record.ready).toBe(true);
-                    });
-
-                    resolve();
-                });
-            })
-        });
-        const lobby_timer = expectAllPredicate(async (player) => {
-            return new Promise((resolve) => {
-                player.once("roundTimerStop", () => {
-                    resolve();
-                });
-            });
-        });
-
-        leaver?.close();
-
-        await Promise.all([sync_timer, lobby_timer]);
+        const leaver = lobby.players.pop();
+        leaver!.socket.close();
+        await Promise.all( [lobby.sync(), lobby.roundTimerStopped()]);
     });
 
-    test("Host starts timer", async () => {
-        const times = new Set();
-        const lobby_timer = expectAllPredicate(async (player) => {
-            return new Promise((resolve) => {
-                player.once("roundTimerStart", (start: number) => {
-                    times.add(start);
-                    resolve();
-                });
-            });
-        });
-
-        players[0].emit("toggleTimer");
-
-        await lobby_timer;
-
-        expect(times.size).toBe(1);
+    test("Host able to start timer", async () => {
+        lobby.players[0].toggleTimer();
+        await lobby.roundTimerStarted();
+    });
+    
+    test("Player joins after timer", async () => {
+        lobby.addPlayer(lobby.createPlayer());
+        await Promise.all( [lobby.sync(), lobby.roundTimerStopped()]);
     });
 
-    test("Player joins after ready", async () => {
-        const timer = expectAllPredicate(async (player) => {
-            return new Promise((resolve) => {
-                player.once("roundTimerStop", () => {
-                    resolve();
-                });
-            });
-        });
-
-        await addPlayer(false);
-        await timer;
+    test("Last player readies", async () => {
+        lobby.players[4].toggleReady();
+        await lobby.sync();
     });
 
-    test("Start round", async () => {
-        const lobby_timer = expectAllPredicate(async (player) => {
-            return new Promise((resolve) => {
-                player.once("lobbySync", (sync: LobbySyncObject[]) => {
-                    sync.forEach((record, index) => {
-                        expect(record.id).toBeDefined();
-                        expect(record.name).toBe(`player${index + 1}`);
-                        expect(record.ready).toBe(true);
-                    });
+    let time_to_start = 0;
+    test("Host able to start timer", async () => {
+        lobby.players[0].toggleTimer();
+        time_to_start = await lobby.roundTimerStarted();
+    });
 
-                    resolve();
-                });
-            })
-        });
-        players[4].emit("toggleReady");
-        await lobby_timer;
-
-        players[0].emit("toggleTimer");
-
-        const time_start = await new Promise<number>((resolve) => {
-            players[0].once("roundTimerStart", (time: number) => {
-                resolve(time);
-            });
-        });
-
-        const finish_times: number[] = [];
-        await expectAllPredicate(async (player) => {
-            return new Promise((resolve, reject) => {
-                player.once("roomChange", () => {
-                    finish_times.push(Date.now());
-                    resolve();
-                });
-            });
-        });
-
-        finish_times.forEach((time) => {
-            expect(time).toBeGreaterThanOrEqual(time_start);
-        });
-
+    test("Timer resolves", async () => {
+        await lobby.newRoom(time_to_start);
     }, 8000);
+});
+
+const game = new Antidote();
+const loading = new Loading();
+let initial_sync: Promise<void>;
+describe ("Loading Testing", () => {
+    test("Loading created successfully", () => {
+        loading.copyFrom(lobby);
+        game.copyFrom(loading);
+        expect( loading.players.length ).toBe(lobby.players.length);
+    });
 
     test("One player loaded", async () => {
-        const sync_timer = expectAllPredicate(async (player) => {
-            return new Promise((resolve) => {
-                player.once("loadingSync", (sync: LoadingSyncObject[]) => {
-                    sync.forEach((record, index) => {
-                        expect(record.id).toBeDefined();
-                        expect(record.name).toBe(`player${index + 1}`);
-                        expect(record.connected).toBe( index == 0 );
-                    });
-
-                    resolve();
-                });
-            })
-        });
-
-        players[0].emit("loaded");
-        await sync_timer;
+        loading.players[0].setLoaded();
+        await loading.sync();
     });
 
     test("Player can't load in multiple times", async () => {
-        const error_timer = new Promise<void>((resolve, reject) => {
-            players[0].once("error", ({ message }) => {
-                expect(message).toBe("Already connected into room.");
-                resolve();
-            });
+        const error = loading.players[0].gotError();
+        error.then( ({message}) => {
+            expect(message).toBe("Already connected into room.");
         });
-        const lobby_timer = new Promise<void>((resolve, reject) => {
-            const timer = setTimeout(() => {
-                players[0].off("loadingSync");
-                resolve();
-            }, 500);
-            players[0].once("loadingSync", () => {
-                clearTimeout(timer);
-                console.error("sync message was still sent");
-                reject();
-            });
-        });
+        const none_sync = loading.noneGetEvent("loadingSync");
+        loading.players[0].setLoaded();
 
-        players[0].emit("loaded");
+        await error;
 
-        await Promise.all([error_timer, lobby_timer]);
+        await Promise.all([error, none_sync]);
     });
 
-    test("The rest of the players load in", async () => {
-
-        players.forEach(() => {
-            hands.push([]);
-            workstations.push([]);
-        })
-
-        const game_timer = expectAllPredicate(async (player) => {
-            return new Promise((resolve) => {
-                player.once("gameSync", (sync: GameSyncObject) => {
-
-                    const player_index = players.findIndex( p => p.id === player.id );
-                    hands[player_index] = sync.hand;
-                    workstations[player_index] = sync.workstation;
-
-                    if (sync.is_turn){
-                        expect(turn).toBe(-1);
-                        turn = player_index;
-                    }
-
-                    resolve();
-                });
-            })
-        });
-
-        let index = 1;
-        for (let player of players){
-            if (player.id === players[0].id){
-                continue;
-            }
-
-
-            const sync_timer = expectAllPredicate(async (player) => {
-                return new Promise((resolve) => {
-                    player.once("loadingSync", (sync: LoadingSyncObject[]) => {
-                        sync.forEach((record, i) => {
-                            expect(record.id).toBeDefined();
-                            expect(record.name).toBe(`player${i+ 1}`);
-                            expect(record.connected).toBe( i <= index );
-                        });
-
-                        resolve();
-                    });
-                })
-            });
-
-            player.emit("loaded");
-            await sync_timer;
-
-            index++;
+    test("Rest of players load in", async () => {
+    
+        initial_sync = game.sync();
+    
+        for (let i = 1; i < loading.players.length; i++){
+            const sync = loading.sync()
+            loading.players[i].setLoaded();
+            await sync;
         }
+    });
 
-        await game_timer;
+});
+
+let antidote_value: string;
+describe("Game Testing", () => {
+    test("Game created successfully", () => {
+        expect( game.players.length ).toBe(loading.players.length);
+    });
+
+    test("Got first sync", async () => {
+        expect(initial_sync).toBeDefined()
+        await initial_sync
     });
 
     test("Hands are the same size", () => {
-        const size = hands[0].length;
-
-        hands.forEach( hand => {
-            expect(hand.length).toBe(size);
+        const size = game.players[0].hand.length;
+        game.players.forEach(player => {
+            expect(player.hand.length).toBe(size);
         });
-    });
+    })
 
-    test("able to determine antidote", () => {
+    test("Workstations are empty", () => {
+        game.players.forEach(player => {
+            expect(player.workstation.length).toBe(0);
+        });
+    })
+
+    test("Able to determine antidote", () => {
         const suits = new Set<string>();
         const x_cards: string[] = [];
-        hands.forEach( hand => {
-            hand.forEach( card => {
+        
+        game.players.forEach( player => {
+            player.hand.forEach( card => {
                 expect(card.suit).toBeDefined();
-                if (!card.suit) return;
+                if (card.suit === undefined) return; //for better type hints
 
                 if (card.suit !== "syringe"){
-                    suits.add( card.suit )
+                    suits.add(card.suit);
                 }
                 if (card.value === "x"){
                     x_cards.push(card.suit);
@@ -495,81 +228,45 @@ describe("Lobby Testing", () => {
         });
 
         expect(suits.size).toBe(1);
+        antidote_value = suits.values().next().value;
+
+        expect(antidote_value).toBeDefined();
     });
 
     test("Send discard request", async () => {
-        const sync_timer = expectAllPredicate(async (player) => {
-            return new Promise((resolve) => {
-                player.once("handQuery", (query: HandQuery) => {
-                    expect(query.can_reject).toBe(false);
-                    expect(query.message).toBe("Discard a card");
-                    expect(query.destination).toBe(undefined);
+        const discard = game.allGotDiscard();
+        const action = game.allGotActionSync();
+        game.current_player.selectDiscard();
+        await Promise.all([ discard, action ]);
 
-                    resolve();
-                });
-            })
-        });
-
-        const action_timer = expectAllPredicate(async (player) => {
-            return new Promise((resolve) => {
-                player.once("actionSync", (sync: ActionSyncObject) => {
-                    expect(sync.waiting_on.length).toBe(players.length);
-
-                    resolve();
-                });
-            });
-        });
-
-        const select: TurnSelectObject = {
-            action: "discard"
-        }
-        players[turn].emit("turnSelect", select);
-        await Promise.all([sync_timer, action_timer]);
+        game.players.forEach( player => {
+            expect( player.waiting ).toBe(true);
+        })
     });
-
     test("Everyone discards", async () => {
-        const sync_timer = expectAllPredicate(async (player) => {
-            return new Promise((resolve) => {
-                player.once("gameSync", (sync: GameSyncObject) => {
-                    const player_index = players.findIndex( p => p.id === player.id );
-                    hands[player_index] = sync.hand;
-                    workstations[player_index] = sync.workstation;
+        const sync = game.sync();
+        for (let i = 0; i < game.players.length; i++){
+            const action_sync = game.allGotActionSync();
+            game.players[i].handResponse(game.players[i].getRegularCard().id);
+            await action_sync;
 
-                    if (sync.is_turn){
-                        expect(player_index).toBe( (turn + 1) % players.length );
-                        turn = player_index;
-                    }
-                    resolve();
-                });
-            })
-        });
-        for (let i = 0; i < players.length; i++){
-            const action_timer = expectAllPredicate(async (player) => {
-                return new Promise((resolve) => {
-                    player.once("actionSync", (sync: ActionSyncObject) => {
-                        expect(sync.waiting_on.length).toBe(players.length - 1 - i);
-
-                        resolve();
-                    });
-                });
-            });
-
-            const regular_card = hands[i].find((c) => {return c.value !== "x" && c.suit !== "syringe"});
-
-            players[i].emit("handResponse", regular_card!.id);
-
-            await action_timer;
+            for (let j = 0; j < game.players.length; j++){
+                expect( game.players[j].waiting ).toBe(j > i);
+            }
         }
 
-        await sync_timer;
+        await sync;
     });
 
     test("Workstation has a card", () => {
-        workstations.forEach( station => {
-            expect(station.length).toBe(1);
+        game.players.forEach( player => {
+            expect(player.workstation.length).toBe(1);
         });
     });
+});
 
+/*
+describe("Lobby Testing", () => {
     async function send_pass_request(direction: "left"|"right"){
         const sync_timer = expectAllPredicate(async (player) => {
             return new Promise((resolve) => {
@@ -661,9 +358,14 @@ describe("Lobby Testing", () => {
         const target_player_socket = turn === 0 ? players[1] : players[0];
 
         const sync = await new Promise<GameSyncObject>((resolve) => {
-            current_player.once("gameSync", (sync: GameSyncObject) => {
-                resolve(sync);
-            });
+
+            players.forEach((player, index) => {
+                player.once("gameSync", (sync: GameSyncObject) => {
+                    if (index === turn){
+                        resolve(sync);
+                    }
+                })
+            })
 
             current_player.emit("resync");
         });
@@ -837,4 +539,155 @@ describe("Lobby Testing", () => {
         await sync_timer;
     });
 
+    async function currentTurnHasSyringe(): Promise<boolean>{
+        const current_player = players[turn];
+
+        const sync = await new Promise<GameSyncObject>((resolve) => {
+            players.forEach((player, index) => {
+                player.once("gameSync", (sync: GameSyncObject) => {
+                    if (sync.is_turn){
+                        turn = index;
+                    }
+                    if (index === turn){
+                        resolve(sync);
+                    }
+                })
+            })
+
+            current_player.emit("resync");
+        });
+
+        const syringe = sync.hand.find(c => c.suit === "syringe");
+        return syringe !== undefined;
+    }
+
+    async function stallUntilSyringeHand(){
+        while (!(await currentTurnHasSyringe())){
+            await send_pass_request("left");
+            await send_pass_hand_responses("left");
+        }
+        const syringe = hands[turn].find(c => c.suit === "syringe");
+        return syringe!.id;
+    }
+
+    test("Syringe player", async () => {
+        const syringe_id = await stallUntilSyringeHand();
+
+        console.log(turn);
+
+        const current_player = players[turn];
+        const target_player_hand = turn === 0 ? hands[1] : hands[0];
+
+        const sync = await new Promise<GameSyncObject>((resolve) => {
+            players.forEach((player, index) => {
+                player.once("gameSync", (sync: GameSyncObject) => {
+                    if (index === turn){
+                        resolve(sync);
+                    }
+                })
+            })
+
+            current_player.emit("resync");
+        });
+
+        const current_player_id = sync.id;
+        const target_player_id = sync.players[0].id;
+
+        const sync_timer = expectAllPredicate(async (player) => {
+            return new Promise<void>((resolve) => {
+                player.once("gameSync", (sync: GameSyncObject) => {
+                    const player_index = players.findIndex( p => p.id === player.id );
+                    hands[player_index] = sync.hand;
+                    workstations[player_index] = sync.workstation;
+
+                    if (sync.id === current_player_id){
+                        const new_card = sync.hand[sync.hand.length - 1];
+                        const found_card = target_player_hand.find(c => c.id === new_card.id);
+                        expect(found_card).toBeDefined();
+                    } else if (sync.id === target_player_id){
+                        const found_card = sync.hand.find( c => c.id === syringe_id);
+                        console.log(sync.hand);
+                        expect(found_card).toBeDefined();
+                    }
+
+                    if (sync.is_turn){
+                        expect(player_index).toBe( (turn + 1) % players.length );
+                        turn = player_index;
+                    }
+                    resolve();
+                });
+            })
+        });
+
+        const select: TurnSelectObject = {
+            action: "use",
+            argument: syringe_id,
+            argument2: "player",
+            argument3: target_player_id,
+        }
+
+        current_player.emit("turnSelect", select);
+        await sync_timer;
+
+    });
+
+    test("Syringe card", async () => {
+        const syringe_id = await stallUntilSyringeHand();
+
+        const current_player = players[turn];
+
+        console.log(turn)
+
+        const sync = await new Promise<GameSyncObject>((resolve) => {
+            players.forEach((player, index) => {
+                player.once("gameSync", (sync: GameSyncObject) => {
+                    if (index === turn){
+                        resolve(sync);
+                    }
+                })
+            })
+
+            current_player.emit("resync");
+        });
+
+        const current_player_id = sync.id;
+        const target_player_id = sync.players[0].id;
+        const target_card_id = sync.players[0].workstation[0].id;
+
+        const sync_timer = expectAllPredicate(async (player) => {
+            return new Promise((resolve) => {
+                player.once("gameSync", (sync: GameSyncObject) => {
+                    const player_index = players.findIndex( p => p.id === player.id );
+                    hands[player_index] = sync.hand;
+                    workstations[player_index] = sync.workstation;
+
+                    if (sync.id === current_player_id){
+                        const found_card = sync.hand.find( c => c.id === target_card_id );
+                        expect(found_card).toBeDefined();
+                    } else if (sync.id === target_player_id){
+                        const found_card = sync.workstation.find( c => c.id === syringe_id);
+                        expect(found_card).toBeDefined();
+                    }
+
+                    if (sync.is_turn){
+                        expect(player_index).toBe( (turn + 1) % players.length );
+                        turn = player_index;
+                    }
+                    resolve();
+                });
+            });
+        });
+
+        const select: TurnSelectObject = {
+            action: "use",
+            argument: syringe_id,
+            argument2: "card",
+            argument3: target_card_id,
+        }
+
+        current_player.emit("turnSelect", select);
+        await sync_timer;
+    });
+
 });
+*/

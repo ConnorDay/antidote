@@ -29,10 +29,10 @@ export class Antidote extends Room {
     addPlayer(player: GamePlayer, sync?: boolean) {
         super.addPlayer(player, sync);
         
-        player.on("actionSelected", (action: ActionType, argument?: string) => {this.handleActionSelect(action, argument)} );
+        player.on("actionSelected", (action: ActionType, argument?: string, argument2?:string, argument3?: string) => {this.handleActionSelect(action, argument, argument2, argument3)} );
     }
 
-    async handleActionSelect( action: ActionType, argument?: string){
+    async handleActionSelect( action: ActionType, argument?: string, argument2?:string, argument3?: string){
         this.current_action = action;
         let update_turn = false;
         switch (action){
@@ -43,6 +43,7 @@ export class Antidote extends Room {
                 update_turn = await this.handleTrade(argument);
                 break;
             case "use":
+                update_turn = await this.handleUse(argument, argument2, argument3);
                 break;
             case "pass":
                 update_turn = await this.handlePass(argument);
@@ -59,6 +60,90 @@ export class Antidote extends Room {
         }
         this.sync();
 
+    }
+    
+    async handleUse(card_id?: string, target_type?: string, target_id?: string){
+        if (card_id === undefined){
+            throw "Card id must be defined";
+        }
+        if (target_type === undefined){
+            throw "Target type must be defined";
+        }
+        if (target_id === undefined){
+            throw "Target id must be defined";
+        }
+
+        const current_player = this.turn_order[this.current_turn];
+        const found_card = current_player.hand.find( c => c.id === card_id );
+        if (found_card === undefined){
+            throw `Unable to find card with id '${card_id}' for Player '${current_player.name}'`;
+        }
+
+        switch(found_card.suit){
+            case "syringe":
+                if (target_type === "card"){
+                    return await this.handleUseSyringeCard(current_player, found_card, target_id);
+                }else if (target_type === "player"){
+                    return await this.handleUseSyringePlayer(current_player, found_card, target_id);
+                }
+                break;
+            default:
+                throw `Suit '${found_card.suit}' is not implemented`;
+        }
+
+        return false;
+    }
+
+    async handleUseSyringePlayer(current_player: GamePlayer, card: Card, target_player_id: string){
+        const target_player = this.connected_players.find( p => p.id === target_player_id );
+        if (target_player === undefined){
+            throw `Unable to find connected player with id '${target_player_id}'`
+        }
+
+        console.log(`Player '${current_player.name}' used a syringe on Player '${target_player.name}'`);
+
+        const hand_index = Math.floor(Math.random() * target_player.hand.length);
+        const random_card = target_player.hand[hand_index];
+
+        console.log(`Randomly selected Card '{suit:${random_card.suit}, value:${random_card.value}, id:${random_card.id}}'`);
+        
+        target_player.discard(random_card)
+        target_player.hand.push(card);
+        console.log(target_player.hand)
+
+        current_player.hand.push(random_card);
+        current_player.discard(card);
+        console.log(current_player.hand)
+
+        return true;
+    }
+
+    async handleUseSyringeCard(current_player: GamePlayer, card: Card, target_card_id: string){
+        let target_player: GamePlayer|undefined = undefined;
+        let target_card: Card|undefined = undefined;
+
+        for (let player of this.turn_order){
+            const found_card = player.workstation.find( c => c.id === target_card_id );
+            if (found_card !== undefined){
+                target_player = player;
+                target_card = found_card;
+                break;
+            }
+        }
+
+        if (target_player === undefined || target_card === undefined){
+            throw `Unable to find a player with a workstation that has a card with id '${target_card_id}`
+        }
+
+        const workstation_index = target_player.workstation.indexOf(target_card);
+        if (workstation_index < 0){
+            throw `Somehow unable to get index of workstation card.`;
+        }
+
+        target_player.workstation[workstation_index] = card;
+        current_player.hand.push(target_card);
+
+        return true;
     }
 
     async handleTrade( target_player_id?: string ): Promise<boolean>{
@@ -188,7 +273,7 @@ export class Antidote extends Room {
                     return;
                 }
 
-                const is_turn = this.getCurrentPlayerTurnId() === player.id;
+                const is_turn = this.getCurrentPlayerTurnId() === sub_player.id;
                 status.push({
                     name: sub_player.name,
                     id: sub_player.id,
