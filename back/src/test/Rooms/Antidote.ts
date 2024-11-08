@@ -43,6 +43,20 @@ export class Antidote extends Room<AntidotePlayer> {
 		await Promise.all(promises);
 	}
 
+    async onlyTargetGotTrade( source_id:string, target_id: string ){
+        const promises: Promise<void>[] = [];
+
+        this.players.forEach( (player) => {
+            if (player.id === target_id) {
+                promises.push( player.gotTradeQuery(source_id) );
+            } else {
+                promises.push( player.doesNotGetEvent("handQuery") );
+            }
+        });
+
+        await Promise.all( promises );
+    }
+
 	async allSendRegularResponse() {
 		const sync = this.sync();
 		const card_ids: string[] = [];

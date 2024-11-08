@@ -59,9 +59,29 @@ export class AntidotePlayer extends Player {
 		expect(query.destination).toBe(undefined);
 	}
 
+    async gotTradeQuery( source_id: string ){
+        const query = await this.gotHandQuery();
+
+        expect(query.can_reject).toBe(true);
+        expect(query.message).toBe("Trade a card");
+        expect(query.destination).toBe( source_id );
+    }
+
+    getSyringe() {
+        const card = this.hand.find( (c) => {
+            return c.suit === "syringe";
+        });
+
+		if (card === undefined) {
+			throw "unable to find regular card.";
+		}
+
+        return card;
+    }
+
 	getRegularCard() {
 		const card = this.hand.find((c) => {
-			return c.suit != "syringe" && c.value != "x";
+			return c.suit !== "syringe" && c.value !== "x";
 		});
 
 		if (card === undefined) {
@@ -71,7 +91,7 @@ export class AntidotePlayer extends Player {
 		return card;
 	}
 
-	handResponse(card_id: string) {
+	handResponse(card_id: string|undefined) {
 		this.waiting = false;
 		this.socket.emit("handResponse", card_id);
 	}
@@ -90,6 +110,9 @@ export class AntidotePlayer extends Player {
 	selectPass(direction: "left" | "right") {
 		this.selectTurnAction("pass", direction);
 	}
+    selectTrade(target: string){
+        this.selectTurnAction("trade", target);
+    }
 
 	actionSync(sync: ActionSyncObject) {
 		if (sync.waiting_on.includes(this.id)) {
