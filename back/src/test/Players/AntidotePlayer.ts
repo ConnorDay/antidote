@@ -96,10 +96,12 @@ export class AntidotePlayer extends Player {
 		this.socket.emit("handResponse", card_id);
 	}
 
-	selectTurnAction(action: ActionType, argument?: string) {
+	selectTurnAction(action: ActionType, argument?: string, argument2?: string, argument3?: string) {
 		const object: TurnSelectObject = {
 			action: action,
 			argument: argument,
+			argument2: argument2,
+			argument3: argument3,
 		};
 
 		this.socket.emit("turnSelect", object);
@@ -112,6 +114,9 @@ export class AntidotePlayer extends Player {
 	}
     selectTrade(target: string){
         this.selectTurnAction("trade", target);
+    }
+    selectUseSyringe( type:"player"|"card", target_id: string ){
+        this.selectTurnAction( "use", this.getSyringe().id, type, target_id);
     }
 
 	actionSync(sync: ActionSyncObject) {

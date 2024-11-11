@@ -480,6 +480,14 @@ describe("Game Testing", () => {
 
     describe("Syringe Testing", () => {
         describe("Syringe Player", () => {
+            let source_player_id: string;
+            let source_player_index: number;
+            let source_player_hand: CardObject[] = [];
+
+            let target_player_id: string;
+            let target_player_index: number
+            let target_player_hand: CardObject[] = [];
+
             test("Get to player who has a syringe", async () => {
                 while ( game.current_player.hand.find( c => c.suit=="syringe") === undefined ) {
                     const pass = game.allGotPass("right");
@@ -501,7 +509,116 @@ describe("Game Testing", () => {
             });
 
             test("Send Syringe Request", async () => {
+                source_player_id = game.current_player.id;
+                source_player_index = game.players.indexOf( game.current_player );
+                game.current_player.hand.forEach( c => source_player_hand.push(c) );
+
+                target_player_index = ( source_player_index + 1 ) % game.players.length;
+                target_player_id = game.players[target_player_index].id
+                game.players[target_player_index].hand.forEach( c => target_player_hand.push(c) );
+
+                const sync = game.sync();
+                game.current_player.selectUseSyringe("player", target_player_id)
+                await sync;
             });
+
+            describe("Target player has a new syringe that is missing from the source player", () => {
+                let target_player_card: CardObject;
+                test("Target player has a new syringe", () => {
+                    const target_player = game.players[target_player_index];
+
+                    const new_card = target_player.hand.find( new_hand_card => {
+                        const found_card = target_player_hand.find( old_hand_card => {
+                            return new_hand_card.id === old_hand_card.id;
+                        });
+
+                        return found_card === undefined;
+                    });
+
+                    expect(new_card).toBeDefined();
+                    if (new_card === undefined) {
+                        throw "could not find new card";
+                    }
+
+                    expect(new_card.suit).toBe("syringe");
+
+                    target_player_card = new_card;
+                });
+                test("Source player is missing a syringe", () => {
+                    let before_count = 0;
+                    source_player_hand.forEach( c => {
+                        if ( c.suit == "syringe" ){
+                            before_count++;
+                        }
+                    });
+
+                    let after_count = 0;
+                    game.players[source_player_index].hand.forEach( c=> {
+                        if ( c.suit == "syringe" ){
+                            after_count++;
+                        }
+                    });
+
+                    expect(after_count).toBe( before_count - 1 );
+                });
+                test("Syringe Id is not in source player's hand", () => {
+                    const found_card = game.players[source_player_index].hand.find( c => {
+                        return c.id === target_player_card.id;
+                    });
+
+                    expect(found_card).toBeUndefined();
+                });
+            });
+            describe("Target player lost a card that was gained by the source player", () => {
+                let source_player_card: CardObject;
+                test("Source player has a new card", () => {
+                    const source_player = game.players[source_player_index];
+
+                    const new_card = source_player.hand.find( new_hand_card => {
+                        const found_card = source_player_hand.find( old_hand_card => {
+                            return new_hand_card.id === old_hand_card.id;
+                        });
+
+                        return found_card === undefined;
+                    });
+
+                    expect(new_card).toBeDefined();
+                    if (new_card === undefined) {
+                        throw "could not find new card";
+                    }
+
+                    source_player_card = new_card;
+                });
+                test("Card Id is not in target player's hand", () => {
+                    const found_card = game.players[target_player_index].hand.find( c => {
+                        return c.id === source_player_card.id;
+                    });
+
+                    expect(found_card).toBeUndefined();
+                });
+            });
+        });
+
+        describe("Syringe Card", () => {
+            test("Get to player who has a syringe", async () => {
+                while ( game.current_player.hand.find( c => c.suit=="syringe") === undefined ) {
+                    const pass = game.allGotPass("right");
+                    game.current_player.selectPass("right");
+
+                    const action = game.allGotActionSync();
+                    game.current_player.selectDiscard();
+                    await Promise.all([pass, action]);
+
+                    game.players.forEach((player) => {
+                        expect(player.waiting).toBe(true);
+                    });
+                    const card_ids = await game.allSendRegularResponse();
+                    card_ids.forEach((card_id, index) => {
+                        const next_index = (game.players.length + 1 + index) % game.players.length;
+                        expect( game.players[next_index].hand.find(c => c.id === card_id) ).toBeDefined()
+                    });
+                }
+            })
         });
     });
 
@@ -515,142 +632,6 @@ afterAll(() => {
 
 /*
 describe("Lobby Testing", () => {
-    test("Trade current player cancelled", async () => {
-        const [current_player_id, target_player_id] = await send_trade_request();
-
-        const action_timer = expectAllPredicate(async (player) => {
-            return new Promise((resolve) => {
-                player.once("actionSync", (sync: ActionSyncObject) => {
-                    expect(sync.waiting_on.length).toBe(1);
-
-                    resolve();
-                });
-            });
-        });
-
-        const hand_timer = new Promise<void>((resolve) => {
-            players[turn].once("handQuery", (query: HandQuery) => {
-                expect(query.can_reject).toBe(true);
-                expect(query.message).toBe("Trade a card");
-                expect(query.destination).toBe(target_player_id);
-
-                resolve();
-            });
-        });
-
-        query_response( turn === 0 ? 1 : 0, 0 );
-        await Promise.all([action_timer, hand_timer]);
-        
-        const sync_timer = expectAllPredicate(async (player) => {
-            return new Promise((resolve) => {
-                player.once("gameSync", (sync: GameSyncObject) => {
-                    const player_index = players.findIndex( p => p.id === player.id );
-                    hands[player_index] = sync.hand;
-                    workstations[player_index] = sync.workstation;
-
-                    if (sync.is_turn){
-                        expect(player_index).toBe(turn);
-                    }
-                    resolve();
-                });
-            })
-        });
-
-        query_response( turn, undefined );
-        await sync_timer;
-    });
-
-    test("Trade successfully", async () => {
-        const [current_player_id, target_player_id] = await send_trade_request();
-
-        const action_timer = expectAllPredicate(async (player) => {
-            return new Promise((resolve) => {
-                player.once("actionSync", (sync: ActionSyncObject) => {
-                    expect(sync.waiting_on.length).toBe(1);
-
-                    resolve();
-                });
-            });
-        });
-
-        const hand_timer = new Promise<void>((resolve) => {
-            players[turn].once("handQuery", (query: HandQuery) => {
-                expect(query.can_reject).toBe(true);
-                expect(query.message).toBe("Trade a card");
-                expect(query.destination).toBe(target_player_id);
-
-                resolve();
-            });
-        });
-
-        const target_card = query_response( turn === 0 ? 1 : 0, 0 );
-        expect(target_card).toBeDefined();
-        await Promise.all([action_timer, hand_timer]);
-
-        let source_card: string|undefined;
-
-        const sync_timer = expectAllPredicate(async (player) => {
-            return new Promise((resolve) => {
-                player.once("gameSync", (sync: GameSyncObject) => {
-                    const player_index = players.findIndex( p => p.id === player.id );
-                    hands[player_index] = sync.hand;
-                    workstations[player_index] = sync.workstation;
-
-                    if (sync.id === current_player_id){
-                        const found_card = sync.hand.find( c => c.id === target_card);
-                        expect(found_card).toBeDefined();
-                    } else if (sync.id === target_player_id){
-                        const found_card = sync.hand.find( c => c.id === source_card);
-                        expect(found_card).toBeDefined();
-                    }
-
-                    if (sync.is_turn){
-                        expect(player_index).toBe( (turn + 1) % players.length );
-                        turn = player_index;
-                    }
-                    resolve();
-                });
-            });
-        });
-
-
-        source_card = query_response( turn, 0 );
-        expect(source_card).toBeDefined();
-
-        await sync_timer;
-    });
-
-    async function currentTurnHasSyringe(): Promise<boolean>{
-        const current_player = players[turn];
-
-        const sync = await new Promise<GameSyncObject>((resolve) => {
-            players.forEach((player, index) => {
-                player.once("gameSync", (sync: GameSyncObject) => {
-                    if (sync.is_turn){
-                        turn = index;
-                    }
-                    if (index === turn){
-                        resolve(sync);
-                    }
-                })
-            })
-
-            current_player.emit("resync");
-        });
-
-        const syringe = sync.hand.find(c => c.suit === "syringe");
-        return syringe !== undefined;
-    }
-
-    async function stallUntilSyringeHand(){
-        while (!(await currentTurnHasSyringe())){
-            await send_pass_request("left");
-            await send_pass_hand_responses("left");
-        }
-        const syringe = hands[turn].find(c => c.suit === "syringe");
-        return syringe!.id;
-    }
-
     test("Syringe player", async () => {
         const syringe_id = await stallUntilSyringeHand();
 
