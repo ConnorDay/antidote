@@ -146,10 +146,7 @@ export class GamePlayer extends EmittablePlayer<events> {
 			return;
 		}
 		const playable_cards = ["syringe"];
-		if (
-			found_card.suit === undefined ||
-			!playable_cards.includes(found_card.suit)
-		) {
+		if ( found_card.suit === undefined || !playable_cards.includes(found_card.suit) ) {
 			console.error(
 				`Player '${this.name}' attempted to play a card with suit '${found_card.suit}'`
 			);

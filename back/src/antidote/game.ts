@@ -90,11 +90,7 @@ export class Antidote extends Room {
 		this.sync();
 	}
 
-	async handleUse(
-		card_id?: string,
-		target_type?: string,
-		target_id?: string
-	) {
+	async handleUse( card_id?: string, target_type?: string, target_id?: string) {
 		if (card_id === undefined) {
 			throw "Card id must be defined";
 		}
@@ -161,20 +157,14 @@ export class Antidote extends Room {
 
 		target_player.discard(random_card);
 		target_player.hand.push(card);
-		console.log(target_player.hand);
 
 		current_player.hand.push(random_card);
 		current_player.discard(card);
-		console.log(current_player.hand);
 
 		return true;
 	}
 
-	async handleUseSyringeCard(
-		current_player: GamePlayer,
-		card: Card,
-		target_card_id: string
-	) {
+	async handleUseSyringeCard( current_player: GamePlayer, card: Card, target_card_id: string ) {
 		let target_player: GamePlayer | undefined = undefined;
 		let target_card: Card | undefined = undefined;
 
@@ -185,6 +175,7 @@ export class Antidote extends Room {
 			if (found_card !== undefined) {
 				target_player = player;
 				target_card = found_card;
+                console.log(`Player ${target_player.name} has card id ${target_card_id}`);
 				break;
 			}
 		}
@@ -193,14 +184,14 @@ export class Antidote extends Room {
 			throw `Unable to find a player with a workstation that has a card with id '${target_card_id}`;
 		}
 
-		const workstation_index =
-			target_player.workstation.indexOf(target_card);
+		const workstation_index = target_player.workstation.indexOf(target_card);
 		if (workstation_index < 0) {
 			throw `Somehow unable to get index of workstation card.`;
 		}
 
 		target_player.workstation[workstation_index] = card;
 		current_player.hand.push(target_card);
+        current_player.discard(card);
 
 		return true;
 	}

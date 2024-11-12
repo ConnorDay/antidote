@@ -600,6 +600,14 @@ describe("Game Testing", () => {
         });
 
         describe("Syringe Card", () => {
+            let source_player_id: string;
+            let source_player_index: number;
+            let source_player_hand: CardObject[] = [];
+
+            let target_player_id: string;
+            let target_player_index: number
+            let target_player_workstation: CardObject[] = [];
+
             test("Get to player who has a syringe", async () => {
                 while ( game.current_player.hand.find( c => c.suit=="syringe") === undefined ) {
                     const pass = game.allGotPass("right");
@@ -618,6 +626,68 @@ describe("Game Testing", () => {
                         expect( game.players[next_index].hand.find(c => c.id === card_id) ).toBeDefined()
                     });
                 }
+            });
+
+            test("Send syringe request", async () => {
+                source_player_id = game.current_player.id;
+                source_player_index = game.players.indexOf( game.current_player );
+                game.current_player.hand.forEach( c => source_player_hand.push(c) );
+
+                target_player_index = ( source_player_index + 1 ) % game.players.length;
+                target_player_id = game.players[target_player_index].id
+                game.players[target_player_index].workstation.forEach( c => target_player_workstation.push(c) );
+
+                const sync = game.sync();
+                game.current_player.selectUseSyringe("card", game.players[target_player_index].workstation[0].id );
+                await sync;
+            });
+
+            describe("Target player has a new syringe that is missing from the source player", () => {
+                let target_player_card: CardObject;
+                test("Target player has a new syringe in their workstation", () => {
+                    const target_player = game.players[target_player_index];
+
+                    const new_card = target_player.workstation.find( new_hand_card => {
+                        const found_card = target_player_workstation.find( old_hand_card => {
+                            return new_hand_card.id === old_hand_card.id;
+                        });
+
+                        return found_card === undefined;
+                    });
+
+                    expect(new_card).toBeDefined();
+                    if (new_card === undefined) {
+                        throw "could not find new card";
+                    }
+
+                    expect(new_card.suit).toBe("syringe");
+
+                    target_player_card = new_card;
+                });
+                test("Source player is missing a syringe", () => {
+                    let before_count = 0;
+                    source_player_hand.forEach( c => {
+                        if ( c.suit == "syringe" ){
+                            before_count++;
+                        }
+                    });
+
+                    let after_count = 0;
+                    game.players[source_player_index].hand.forEach( c=> {
+                        if ( c.suit == "syringe" ){
+                            after_count++;
+                        }
+                    });
+
+                    expect(after_count).toBe( before_count - 1 );
+                });
+                test("Syringe Id is not in source player's hand", () => {
+                    const found_card = game.players[source_player_index].hand.find( c => {
+                        return c.id === target_player_card.id;
+                    });
+
+                    expect(found_card).toBeUndefined();
+                });
             })
         });
     });
