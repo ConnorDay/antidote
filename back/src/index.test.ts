@@ -1,7 +1,6 @@
-import { beforeAll, describe, expect, test } from "@jest/globals";
-import { io, Socket } from "socket.io-client";
-import { ActionSyncObject, CardObject, GameSyncObject, LoadingSyncObject, LobbySyncObject, } from "../../common/sync-objects";
-import { HandQuery, TurnSelectObject } from "../../common/antidote-objects";
+import { describe, expect, test } from "@jest/globals";
+import { io } from "socket.io-client";
+import { CardObject } from "../../common/sync-objects";
 import { Lobby } from "./test/Rooms/Lobby";
 import { Loading } from "./test/Rooms/Loading";
 import { Antidote } from "./test/Rooms/Antidote";
